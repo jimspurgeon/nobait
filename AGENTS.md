@@ -121,7 +121,7 @@ LICENSE
 
 - Only include Chrome-specific code if:
   - It's behind a feature detection gate (`typeof chrome !== 'undefined' &&
-    chrome.i18n?.acceptLanguage`),
+chrome.i18n?.acceptLanguage`),
   - A Firefox-compatible fallback exists,
   - And the complexity gain is minimal (<50 LOC per feature).
 - Examples of acceptable Chrome-only features:
@@ -203,12 +203,12 @@ free-form):
 ```typescript
 // src/stamps/types.ts
 export enum StampTier {
-  LEGITIMATE = 'legitimate', // ✓ green  — accurate, honest, matches content
-  EXAGGERATED = 'exaggerated', // ⚠ yellow — true but overstated/sensationalized
-  MISLEADING = 'misleading', // ✗ red    — title implies something false
-  CLICKBAIT = 'clickbait',   // 🎣 orange — withholding, manufactured curiosity
-  FAKE = 'fake',             // ☠️ dark red — fabricated premise/debunked
-  UNSURE = 'unsure',         // ? gray   — insufficient signal data
+  LEGITIMATE = "legitimate", // ✓ green  — accurate, honest, matches content
+  EXAGGERATED = "exaggerated", // ⚠ yellow — true but overstated/sensationalized
+  MISLEADING = "misleading", // ✗ red    — title implies something false
+  CLICKBAIT = "clickbait", // 🎣 orange — withholding, manufactured curiosity
+  FAKE = "fake", // ☠️ dark red — fabricated premise/debunked
+  UNSURE = "unsure", // ? gray   — insufficient signal data
 }
 ```
 
@@ -288,7 +288,7 @@ YouTube is a dynamic SPA. Key points:
   `MutationObserver` on `document.body`.
 - **Navigation handling**:
   - Firefox: Use the `navigation` event (if available) or detect `history.pushState`
-    + popstate.
+    - popstate.
   - Fallback: Poll `window.location` every ~100ms and observe URL changes.
 - **DOM stability**: Wait for key YouTube containers (`#movie_player`,
   `ytd-watch-flexy`, `ytd-video-primary-info-renderer`) before patching. Retry
@@ -301,9 +301,9 @@ Example selector structure:
 ```typescript
 // src/content/dom.ts
 export const SELECTORS = {
-  TITLE: '#video-title, #text.ytd-video-renderer',
-  THUMBNAIL: 'ytd-thumbnail #img',
-  DESCRIPTION: '#description-ytd-player',
+  TITLE: "#video-title, #text.ytd-video-renderer",
+  THUMBNAIL: "ytd-thumbnail #img",
+  DESCRIPTION: "#description-ytd-player",
   // ...
 };
 ```
@@ -368,7 +368,7 @@ transcripts).
 1. Ensure `npm test`, `npm run lint`, and `npm run typecheck` pass.
 2. Rebase on upstream `main` to avoid merge conflicts.
 3. Write conventional commits: `feat: add storyboard parser`, `fix: handle
-   missing transcript`.
+missing transcript`.
 4. Include a brief description of changes, testing steps, and any breaking
    changes.
 
@@ -412,3 +412,25 @@ When in doubt, ask the maintainer or check existing patterns in the codebase.
 ---
 
 _Last updated: 2026-10-08_
+
+## Assumptions & Implementation Notes (as of this skeleton)
+
+1. **Build tooling**: Switched from Vite to pure esbuild for reliability.
+   `build.config.mjs` handles bundling (IIFE format for classic scripts).
+
+2. **Content script**: Uses a combination of `yt-navigate-finish`, Navigation API,
+   and conservative polling (~150ms) to guarantee SPA navigation detection across
+   all supported Firefox versions.
+
+3. **No external dependencies at runtime** beyond what Node.js already provides.
+   Dependencies (Vitest, ESLint, Prettier, esbuild) are dev-only.
+
+4. **Chrome support**: Present in name only (`dev:chrome`/`build:chrome` scripts)
+   but not implemented. When Chrome-specific features are added, they will be
+   gated behind feature detection per AGENTS.md rules.
+
+5. **Test files**: Placeholders exist for URL extraction, DOM scraping, and nav
+   watcher. They pass successfully; real E2E tests arrive in later phases.
+
+6. **Icons**: Auto-generated via `scripts/make-icons.mjs` (solid green PNGs).
+   Replace with designed icons before release.
