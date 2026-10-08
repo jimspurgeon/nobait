@@ -44,9 +44,10 @@ export function dominantRating(claims: FactCheckClaim[]): RatingCategory | null 
     else if (cat === 'true') trueCount++;
   }
 
-  const half = Math.ceil(claims.length / 2);
-  if (falseCount >= half) return 'false';
-  if (trueCount >= half) return 'true';
+  // STRICT majority required for 'false': a 50/50 split must not
+  // corroborate fakery (conservative corroboration semantics).
+  if (claims.length > 0 && falseCount > claims.length / 2) return 'false';
+  if (trueCount > claims.length / 2) return 'true';
   return 'mixed';
 }
 

@@ -135,54 +135,66 @@ export async function evaluateFactCheck(
     return SKIPPED_NO_TRIGGER;
   }
 
-  // Gate 3: racing timeout — the fetch must complete within the deadline.
+  // Gate 3: racing timeout — the fetch MUST complete within the deadline.
+  // We use Promise.race so even a misbehaving fetch cannot delay resolution
+  // beyond the hard timeout (400ms budget).
   const timeoutMs = deps.timeoutMs ?? settings.timeoutMs ?? LOOKUP_TIMEOUT_MS;
   const controller = new AbortController();
-  const deadline = setTimeout(() => controller.abort(), timeoutMs);
 
-  // Track lateness so a slow-but-successful fetch is routed to the
-  // tooltip-refresh path instead of the (already-settled) swap path.
-  let timedOut = false;
-  const onTimeout = () => { timedOut = true; };
-  controller.signal.addEventListener('abort', onTimeout);
+  // Track whether the timeout fired (before fetch settles)
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
-  let claims: FactCheckClaim[] = [];
-  let errored = false;
-  try {
-    const query = buildQuery(meta);
-    const searchResult = await searchClaims(query, apiKey, {
-      fetchImpl: deps.fetchImpl,
-      signal: controller.signal,
-    });
-    claims = searchResult.claims;
-  } catch {
-    // Aborts (timeout) and network errors both land here — silently dropped.
-    errored = true;
-  } finally {
-    clearTimeout(deadline);
-    controller.signal.removeEventListener('abort', onTimeout);
-  }
-
-  // Late arrival: past the deadline, the swap has (by contract) already
-  // settled. Drop it, or hand it to the optional tooltip-refresh hook.
-  if (timedOut) {
-    if (errored && deps.onLateResult == null) {
-      return { status: 'timeout', result: null, strengthened: false };
+  // Build fetch promise that catches all errors (including abort)
+  const fetchPromise: Promise<{ ok: boolean; claims: FactCheckClaim[]; errored: boolean }> = (async () => {
+    try {
+      const query = buildQuery(meta);
+      const searchResult = await searchClaims(query, apiKey, {
+        fetchImpl: deps.fetchImpl,
+        signal: controller.signal,
+      });
+      return { ok: true, claims: searchResult.claims, errored: false };
+    } catch (err) {
+      // Network errors or abort → treat as error/timeout
+      return { ok: false, claims: [], errored: true };
     }
-    // Even a successful fetch past the deadline is a "miss".
-    if (deps.onLateResult != null && claims.length > 0) {
-      // Compose outcome for the tooltip-refresh consumer only.
-      const lateOutcome = applyCorroboration(claims, currentStamp);
-      deps.onLateResult(videoId, lateOutcome);
+  })();
+
+  // Race: whichever finishes first determines the immediate outcome.
+  // A true race — the timer promise resolves on deadline even if the
+  // fetch hangs — guarantees we never block longer than timeoutMs.
+  const timeoutPromise = new Promise<{ timedOut: true }>((resolve) => {
+    timeoutId = setTimeout(() => resolve({ timedOut: true }), timeoutMs);
+  });
+  const winner = await Promise.race([
+    fetchPromise.then((r) => ({ timedOut: false as const, fetch: r })),
+    timeoutPromise,
+  ]);
+
+  clearTimeout(timeoutId!);
+
+  if (winner.timedOut) {
+    // Timer fired first: this is a timeout. Abort the fetch; if it
+    // eventually settles with results and onLateResult is provided,
+    // route it to the tooltip-refresh hook (never the swap path).
+    controller.abort();
+    if (deps.onLateResult != null) {
+      fetchPromise.then((lateFetch) => {
+        if (lateFetch.claims.length > 0) {
+          const lateOutcome = applyCorroboration(lateFetch.claims, currentStamp);
+          deps.onLateResult!(videoId, lateOutcome);
+        }
+      }).catch(() => {}); // swallow late errors
     }
-    return { status: 'timeout', result: null, strengthened: false };
+    return { status: 'timeout' as const, result: null, strengthened: false };
   }
 
-  if (errored) {
-    return { status: 'error', result: null, strengthened: false };
+  // Fetch settled before timeout:
+  if (winner.fetch.errored) {
+    return { status: 'error' as const, result: null, strengthened: false };
   }
 
-  // In-time arrival: apply corroboration semantics.
+  // Apply corroboration semantics to the fetched claims.
+  const { claims } = winner.fetch;
   if (claims.length === 0) {
     // Absence of results never downgrades — return the unchanged stamp.
     return {
