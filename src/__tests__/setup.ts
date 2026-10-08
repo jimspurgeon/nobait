@@ -72,13 +72,14 @@ document.createElement = ((tag: string, opts?: ElementCreationOptions) => {
 }) as typeof document.createElement;
 
 // jsdom Image lacks decode(); give every constructed Image one.
-const OrigImage = globalThis.Image;
-class FakeImage extends OrigImage {
-  decode(): Promise<void> {
-    return Promise.resolve();
-  }
+// Patch the prototype (rather than swapping constructors) so BOTH
+// `new Image()` and `document.createElement('img')` instances get it,
+// regardless of which global binding the module under test captured.
+const imgProto = Object.getPrototypeOf(globalThis.Image?.prototype ?? {});
+if (imgProto && !("decode" in imgProto)) {
+  (imgProto as unknown as { decode: () => Promise<void> }).decode =
+    () => Promise.resolve();
 }
-(globalThis as unknown as { Image: typeof FakeImage }).Image = FakeImage;
 
 // Silence performance.mark if jsdom lacks User Timing entirely.
 if (typeof performance.mark !== "function") {

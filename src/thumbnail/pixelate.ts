@@ -209,6 +209,7 @@ export function paintWave(
 
   for (let li = 0; li < pyramid.levels.length; li++) {
     const level = pyramid.levels[li];
+    if (!level) continue;
     const th = wave.thresholds[li]!;
     if (th === undefined) continue;
     const { cols: c, rows: r } = level;
