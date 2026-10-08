@@ -64,14 +64,14 @@ export function parseSpecString(spec: string, videoDurationMs = 0): PlayerStoryb
   const parts = spec.split('|');
   if (parts.length < 2) throw new Error('nobait/storyboard: malformed spec (too few fields)');
 
-  const baseUrl = parts[0];
+  const baseUrl = parts[0]!;
   if (!/^https?:\/\//.test(baseUrl)) {
     throw new Error('nobait/storyboard: spec URL template missing');
   }
 
   const levels: StoryboardLevel[] = [];
   for (let i = 1; i < parts.length; i++) {
-    const f = parts[i].split('#');
+    const f = parts[i]!.split('#');
     if (f.length < 5) continue;
 
     const width = toNum(f[0]);
@@ -210,7 +210,11 @@ export function selectLevel(spec: PlayerStoryboardSpec, minWidth: number): Story
     if (l.width >= minWidth && (!best || l.width < best.width)) best = l;
   }
   if (!best) {
-    best = [...spec.levels].sort((a, b) => b.width * b.height - a.width * a.height)[0];
+    best = [...spec.levels].sort((a, b) => b.width * b.height - a.width * a.height)[0]
+      ?? null;
+  }
+  if (!best) {
+    throw new Error('nobait/storyboard: spec contains no levels');
   }
   return best;
 }

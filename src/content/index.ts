@@ -46,7 +46,7 @@ async function main(): Promise<void> {
   // --- Stamps pipeline (P3/P4) ---
   scanAndProcess();
   observeMutations();
-  observeNavigation(settings);
+  observeNavigation();
   listenForResults();
 
   // Diagnostics hook (see AGENTS.md debugging tips).
@@ -147,7 +147,7 @@ function scheduleScan(): void {
 /**
  * Observe SPA navigation events
  */
-function observeNavigation(settings: NobaitSettings): void {
+function observeNavigation(): void {
   // Firefox: navigation event if available
   const nav = (globalThis as { navigation?: EventTarget }).navigation;
   if (nav && typeof nav.addEventListener === 'function') {

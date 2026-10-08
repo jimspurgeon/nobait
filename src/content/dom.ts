@@ -20,6 +20,8 @@ export const SELECTORS = {
   TITLE: '#video-title, ytd-rich-item-renderer #video-title, ytd-video-renderer #video-title, #text.ytd-video-renderer',
   /** Watch-page description (P3 signal extraction). */
   WATCH_LINK: 'a[href*="/watch"]',
+  /** Canonical link element (P3). */
+  CANONICAL: 'link[rel="canonical"]',
 } as const;
 
 export interface VideoCard {
@@ -30,12 +32,17 @@ export interface VideoCard {
   containerEl: Element;
 }
 
+export interface VideoHit {
+  videoId: string;
+  source: 'link' | 'url';
+}
+
 /** Parse an 11-char video ID from any YouTube watch/shorts/embed URL. */
 export function videoIdFromUrl(url: string | null | undefined): string | null {
   if (!url) return null;
   const m =
     /[?&]v=([\w-]{11})/.exec(url) ?? /\/(?:shorts|embed)\/([\w-]{11})/.exec(url);
-  return m ? m[1] : null;
+  return m?.[1] ?? null;
 }
 
 /** Extract a video card from a grid item element, null when unusable. */
@@ -50,4 +57,48 @@ export function extractCard(el: Element): VideoCard | null {
     img = holder?.querySelector('img') ?? null;
   }
   return { videoId: id, img, containerEl: el };
+}
+
+/**
+ * Find the closest ancestor element with the given attribute
+ */
+export function closestWithAttribute(el: Element, attr: string): Element | null {
+  let current: Element | null = el;
+  while (current) {
+    if (current.hasAttribute(attr)) {
+      return current;
+    }
+    current = current.parentElement;
+  }
+  return null;
+}
+
+/**
+ * Collect video IDs currently present in the DOM, de-duplicated, in DOM
+ * order. Callers run this after mutations or navigations; it is cheap
+ * (querySelectorAll over link selectors only).
+ */
+export function findVideoHits(root: ParentNode = document): VideoHit[] {
+  const seen = new Set<string>();
+  const hits: VideoHit[] = [];
+
+  const push = (videoId: string, source: VideoHit['source']) => {
+    if (!seen.has(videoId)) {
+      seen.add(videoId);
+      hits.push({ videoId, source });
+    }
+  };
+
+  root.querySelectorAll?.(SELECTORS.WATCH_LINK).forEach((a) => {
+    const id = extractVideoId((a as HTMLAnchorElement).href);
+    if (id) push(id, 'link');
+  });
+
+  // Canonical link (watch pages) survives even when links are not rendered.
+  root.querySelectorAll?.(SELECTORS.CANONICAL)?.forEach?.((link) => {
+    const id = extractVideoId((link as HTMLLinkElement).href);
+    if (id) push(id, 'link');
+  });
+
+  return hits;
 }

@@ -20,11 +20,11 @@ describe('parseSpecString', () => {
       sigh: 'sighL0',
       framesPerSheet: 25,
     });
-    expect(l1.width).toBe(80);
-    expect(l2.level).toBe(2);
-    expect(l0.totalFrames).toBe(30);
-    expect(l1.totalFrames).toBe(60);
-    expect(l2.totalFrames).toBe(60);
+    expect(l1!.width).toBe(80);
+    expect(l2!.level).toBe(2);
+    expect(l0!.totalFrames).toBe(30);
+    expect(l1!.totalFrames).toBe(60);
+    expect(l2!.totalFrames).toBe(60);
   });
 
   test('throws on garbage', () => {
@@ -40,7 +40,7 @@ describe('parseSpecString', () => {
     const line = 'https://i.ytimg.com/sb/x/storyboard3_L$L$/$N$.jpg|80#45#5000#2#2#1#1#L0#sig';
     const spec = parseSpecString(line);
     expect(spec.levels.length).toBe(1);
-    expect(spec.levels[0].totalFrames).toBe(4); // 2×2
+    expect(spec.levels[0]!.totalFrames).toBe(4); // 2×2
   });
 });
 
@@ -48,14 +48,14 @@ describe('buildSheetUrl', () => {
   test('substitutes $L$, $N$, $sigh$', () => {
     const line = 'https://i.ytimg.com/sb/x/storyboard3_L$L$/$N$.jpg?sigh=$sigh$|80#45#5000#2#2#1#1#L0#mysig';
     const spec = parseSpecString(line);
-    const url = buildSheetUrl(spec.levels[0], 3);
+    const url = buildSheetUrl(spec.levels[0]!, 3);
     expect(url).toBe('https://i.ytimg.com/sb/x/storyboard3_L0/M3.jpg?sigh=mysig');
   });
 
   test('handles $M$ placeholder variant', () => {
     const line = 'https://i.ytimg.com/sb/x/storyboard3_L$L$/M$M$.jpg?sigh=$sigh$|80#45#5000#2#2#1#1#L0#s9';
     const spec = parseSpecString(line);
-    expect(buildSheetUrl(spec.levels[0], 7)).toBe('https://i.ytimg.com/sb/x/storyboard3_L0/M7.jpg?sigh=s9');
+    expect(buildSheetUrl(spec.levels[0]!, 7)).toBe('https://i.ytimg.com/sb/x/storyboard3_L0/M7.jpg?sigh=s9');
   });
 });
 
@@ -66,8 +66,8 @@ describe('parseStoryboardSpec normalization', () => {
     const rt = parseStoryboardSpec(spec);
     expect(rt).not.toBeNull();
     expect(rt!.levels).toHaveLength(1);
-    expect(rt!.levels[0].width).toBe(80);
-    expect(rt!.levels[0].totalFrames).toBe(12); // 60s / 5s
+    expect(rt!.levels[0]!.width).toBe(80);
+    expect(rt!.levels[0]!.totalFrames).toBe(12); // 60s / 5s
   });
 
   test('parses a raw player_response object', () => {
@@ -81,7 +81,7 @@ describe('parseStoryboardSpec normalization', () => {
     };
     const spec = parseStoryboardSpec(playerResponse);
     expect(spec).not.toBeNull();
-    expect(spec!.levels[0].totalFrames).toBe(Math.ceil(62_000 / 5000));
+    expect(spec!.levels[0]!.totalFrames).toBe(Math.ceil(62_000 / 5000));
   });
 
   test('returns null for junk input', () => {
