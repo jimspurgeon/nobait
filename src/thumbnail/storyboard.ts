@@ -60,18 +60,22 @@ function toNum(raw: string | undefined): number {
  * frame counts; without it we fall back to one-sheet totals, which still
  * yields valid (if coarse) positions.
  */
-export function parseSpecString(spec: string, videoDurationMs = 0): PlayerStoryboardSpec {
-  const parts = spec.split('|');
-  if (parts.length < 2) throw new Error('nobait/storyboard: malformed spec (too few fields)');
+export function parseSpecString(
+  spec: string,
+  videoDurationMs = 0,
+): PlayerStoryboardSpec {
+  const parts = spec.split("|");
+  if (parts.length < 2)
+    throw new Error("nobait/storyboard: malformed spec (too few fields)");
 
   const baseUrl = parts[0]!;
   if (!/^https?:\/\//.test(baseUrl)) {
-    throw new Error('nobait/storyboard: spec URL template missing');
+    throw new Error("nobait/storyboard: spec URL template missing");
   }
 
   const levels: StoryboardLevel[] = [];
   for (let i = 1; i < parts.length; i++) {
-    const f = parts[i]!.split('#');
+    const f = parts[i]!.split("#");
     if (f.length < 5) continue;
 
     const width = toNum(f[0]);
@@ -80,7 +84,8 @@ export function parseSpecString(spec: string, videoDurationMs = 0): PlayerStoryb
     const columns = toNum(f[3]);
     const rows = toNum(f[4]);
     const sigh = f.length >= 9 && f[8] ? f[8] : null;
-    if (!(width > 0 && height > 0 && intervalMs > 0 && columns > 0 && rows > 0)) continue;
+    if (!(width > 0 && height > 0 && intervalMs > 0 && columns > 0 && rows > 0))
+      continue;
 
     const framesPerSheet = columns * rows;
     const totalFrames =
@@ -103,7 +108,7 @@ export function parseSpecString(spec: string, videoDurationMs = 0): PlayerStoryb
   }
 
   if (levels.length === 0) {
-    throw new Error('nobait/storyboard: no usable levels in spec');
+    throw new Error("nobait/storyboard: no usable levels in spec");
   }
   return { levels, durationMs: videoDurationMs };
 }
@@ -114,7 +119,7 @@ export function buildSheetUrl(level: StoryboardLevel, sheet: number): string {
     .replace(/\$L\$/g, String(level.level))
     .replace(/\$N\$/g, `M${sheet}`)
     .replace(/\$M\$/g, String(sheet))
-    .replace(/\$sigh\$/g, level.sigh ?? '');
+    .replace(/\$sigh\$/g, level.sigh ?? "");
 }
 
 interface RawPlayerResponse {
@@ -126,16 +131,16 @@ interface RawPlayerResponse {
 }
 
 function isValidLevel(l: unknown): l is StoryboardLevel {
-  if (!l || typeof l !== 'object') return false;
+  if (!l || typeof l !== "object") return false;
   const v = l as Record<string, unknown>;
   return (
-    typeof v.baseUrl === 'string' &&
-    typeof v.columns === 'number' &&
-    typeof v.rows === 'number' &&
-    typeof v.framesPerSheet === 'number' &&
-    typeof v.width === 'number' &&
-    typeof v.height === 'number' &&
-    typeof v.totalFrames === 'number'
+    typeof v.baseUrl === "string" &&
+    typeof v.columns === "number" &&
+    typeof v.rows === "number" &&
+    typeof v.framesPerSheet === "number" &&
+    typeof v.width === "number" &&
+    typeof v.height === "number" &&
+    typeof v.totalFrames === "number"
   );
 }
 
@@ -145,16 +150,18 @@ function isValidLevel(l: unknown): l is StoryboardLevel {
  * a raw `player_response` object, or a raw spec string. Returns null when
  * nothing parseable is found — callers degrade gracefully.
  */
-export function parseStoryboardSpec(input: unknown): PlayerStoryboardSpec | null {
+export function parseStoryboardSpec(
+  input: unknown,
+): PlayerStoryboardSpec | null {
   if (!input) return null;
-  if (typeof input === 'string') {
+  if (typeof input === "string") {
     try {
       return parseSpecString(input);
     } catch {
       return null;
     }
   }
-  if (typeof input !== 'object') return null;
+  if (typeof input !== "object") return null;
 
   const obj = input as Record<string, unknown>;
 
@@ -164,7 +171,13 @@ export function parseStoryboardSpec(input: unknown): PlayerStoryboardSpec | null
     if (levels.every(isValidLevel)) {
       return {
         levels: levels as StoryboardLevel[],
-        durationMs: typeof obj.durationMs === 'number' ? obj.durationMs : (levels[0] as StoryboardLevel).totalFrames > 0 ? (levels[0] as StoryboardLevel).intervalMs * (levels[0] as StoryboardLevel).totalFrames : 0,
+        durationMs:
+          typeof obj.durationMs === "number"
+            ? obj.durationMs
+            : (levels[0] as StoryboardLevel).totalFrames > 0
+              ? (levels[0] as StoryboardLevel).intervalMs *
+                (levels[0] as StoryboardLevel).totalFrames
+              : 0,
       };
     }
     return null;
@@ -177,8 +190,9 @@ export function parseStoryboardSpec(input: unknown): PlayerStoryboardSpec | null
       raw.storyboards.playerStoryboardSpecRenderer?.spec ??
       raw.storyboards.playerLiveStoryboardSpecRenderer?.spec;
     const lengthSec = Number(raw.videoDetails?.lengthSeconds ?? 0);
-    const durationMs = Number.isFinite(lengthSec) && lengthSec > 0 ? lengthSec * 1000 : 0;
-    if (typeof specStr === 'string') {
+    const durationMs =
+      Number.isFinite(lengthSec) && lengthSec > 0 ? lengthSec * 1000 : 0;
+    if (typeof specStr === "string") {
       try {
         return parseSpecString(specStr, durationMs);
       } catch {
@@ -195,7 +209,9 @@ export function parseStoryboardSpec(input: unknown): PlayerStoryboardSpec | null
  * Extract the storyboard spec for one video from raw `player_response`
  * JSON (fetched from the InnerTube API by the caller).
  */
-export function specFromPlayerResponse(playerResponse: unknown): PlayerStoryboardSpec | null {
+export function specFromPlayerResponse(
+  playerResponse: unknown,
+): PlayerStoryboardSpec | null {
   return parseStoryboardSpec(playerResponse);
 }
 
@@ -204,17 +220,22 @@ export function specFromPlayerResponse(playerResponse: unknown): PlayerStoryboar
  * files grow quadratically with level). Falls back to the largest level
  * when none is wide enough.
  */
-export function selectLevel(spec: PlayerStoryboardSpec, minWidth: number): StoryboardLevel {
+export function selectLevel(
+  spec: PlayerStoryboardSpec,
+  minWidth: number,
+): StoryboardLevel {
   let best: StoryboardLevel | null = null;
   for (const l of spec.levels) {
     if (l.width >= minWidth && (!best || l.width < best.width)) best = l;
   }
   if (!best) {
-    best = [...spec.levels].sort((a, b) => b.width * b.height - a.width * a.height)[0]
-      ?? null;
+    best =
+      [...spec.levels].sort(
+        (a, b) => b.width * b.height - a.width * a.height,
+      )[0] ?? null;
   }
   if (!best) {
-    throw new Error('nobait/storyboard: spec contains no levels');
+    throw new Error("nobait/storyboard: spec contains no levels");
   }
   return best;
 }

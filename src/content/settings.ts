@@ -4,7 +4,7 @@
  * or non-extension contexts).
  */
 
-import { DEFAULT_THUMB_CONFIG, type FramePosition } from '../thumbnail/types';
+import { DEFAULT_THUMB_CONFIG, type FramePosition } from "../thumbnail/types";
 
 export interface NobaitSettings {
   thumbnailPosition: FramePosition;
@@ -17,16 +17,16 @@ export const DEFAULT_SETTINGS: NobaitSettings = {
 };
 
 function posFromRaw(raw: unknown): FramePosition {
-  if (raw && typeof raw === 'object' && 'kind' in raw) {
+  if (raw && typeof raw === "object" && "kind" in raw) {
     const v = raw as FramePosition;
     switch (v.kind) {
-      case 'start':
-      case 'middle':
-      case 'end':
-      case 'random':
+      case "start":
+      case "middle":
+      case "end":
+      case "random":
         return { kind: v.kind };
-      case 'percent':
-        return { kind: 'percent', value: Number(v.value) || 0.5 };
+      case "percent":
+        return { kind: "percent", value: Number(v.value) || 0.5 };
     }
   }
   return DEFAULT_SETTINGS.thumbnailPosition;
@@ -34,8 +34,10 @@ function posFromRaw(raw: unknown): FramePosition {
 
 export async function loadSettings(): Promise<NobaitSettings> {
   try {
-    const api = (globalThis as Record<string, any>).browser ?? (globalThis as Record<string, any>).chrome;
-    const stored = await api?.storage?.local?.get(['settings']);
+    const api =
+      (globalThis as Record<string, any>).browser ??
+      (globalThis as Record<string, any>).chrome;
+    const stored = await api?.storage?.local?.get(["settings"]);
     const raw = stored?.settings ?? {};
     return {
       thumbnailPosition: posFromRaw(raw.thumbnailPosition),

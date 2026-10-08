@@ -1,6 +1,6 @@
-import { StampTier } from './factcheck-types.js';
-import { classifyRating } from './factcheck-client.js';
-import type { FactCheckClaim, RatingCategory } from './factcheck-client.js';
+import { StampTier } from "./factcheck-types.js";
+import { classifyRating } from "./factcheck-client.js";
+import type { FactCheckClaim, RatingCategory } from "./factcheck-client.js";
 
 /**
  * Corroboration semantics: map claim-review ratings into stamp influence.
@@ -33,22 +33,24 @@ export interface CorroborationOutcome {
  * else collapses to 'mixed' — informative for the tooltip but never
  * sufficient to alter the stamp. Null when there are no reviews at all.
  */
-export function dominantRating(claims: FactCheckClaim[]): RatingCategory | null {
+export function dominantRating(
+  claims: FactCheckClaim[],
+): RatingCategory | null {
   if (claims.length === 0) return null;
 
   let falseCount = 0;
   let trueCount = 0;
   for (const claim of claims) {
     const cat = classifyRating(claim.textualRating);
-    if (cat === 'false') falseCount++;
-    else if (cat === 'true') trueCount++;
+    if (cat === "false") falseCount++;
+    else if (cat === "true") trueCount++;
   }
 
   // STRICT majority required for 'false': a 50/50 split must not
   // corroborate fakery (conservative corroboration semantics).
-  if (claims.length > 0 && falseCount > claims.length / 2) return 'false';
-  if (trueCount > claims.length / 2) return 'true';
-  return 'mixed';
+  if (claims.length > 0 && falseCount > claims.length / 2) return "false";
+  if (trueCount > claims.length / 2) return "true";
+  return "mixed";
 }
 
 /**
@@ -66,7 +68,7 @@ export function applyCorroboration(
   let stamp = currentStamp;
   let changed = false;
 
-  if (primaryRating === 'false' && currentStamp !== StampTier.FAKE) {
+  if (primaryRating === "false" && currentStamp !== StampTier.FAKE) {
     // Corroborated falsehood → strengthen to FAKE.
     stamp = StampTier.FAKE;
     changed = true;
@@ -85,12 +87,16 @@ export function applyCorroboration(
  *
  * Format: "Publisher — rating: truncated claim"
  */
-export function formatSourceLines(claims: FactCheckClaim[], maxLines = 3): string[] {
+export function formatSourceLines(
+  claims: FactCheckClaim[],
+  maxLines = 3,
+): string[] {
   const lines: string[] = [];
   for (const claim of claims.slice(0, maxLines)) {
-    const claimSnippet = claim.claimText.length > 60
-      ? `${claim.claimText.slice(0, 57)}...`
-      : claim.claimText;
+    const claimSnippet =
+      claim.claimText.length > 60
+        ? `${claim.claimText.slice(0, 57)}...`
+        : claim.claimText;
     lines.push(`${claim.publisher} — ${claim.textualRating}: ${claimSnippet}`);
   }
   return lines;
@@ -103,6 +109,8 @@ export function formatSourceLines(claims: FactCheckClaim[], maxLines = 3): strin
  * or re-gate the swap. Here, relevance means an earlier result had not
  * already finalized a stamp change (a changed stamp would supersede).
  */
-export function isStillRelevant(previousOutcome: CorroborationOutcome | null): boolean {
+export function isStillRelevant(
+  previousOutcome: CorroborationOutcome | null,
+): boolean {
   return previousOutcome != null && !previousOutcome.changed;
 }

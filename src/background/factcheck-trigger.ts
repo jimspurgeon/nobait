@@ -20,33 +20,116 @@ export interface TopicKeywordConfig {
 export const DEFAULT_TOPIC_KEYWORDS: Readonly<TopicKeywordConfig> = {
   topics: {
     news: [
-      'news', 'breaking', 'reported', 'according to', 'sources say',
-      'exclusive', 'leaked', 'announced', 'press conference',
-      'journalist', 'headline', 'coverage', 'official', 'authorities',
-      'crisis', 'eyewitness', 'footage', 'statement',
+      "news",
+      "breaking",
+      "reported",
+      "according to",
+      "sources say",
+      "exclusive",
+      "leaked",
+      "announced",
+      "press conference",
+      "journalist",
+      "headline",
+      "coverage",
+      "official",
+      "authorities",
+      "crisis",
+      "eyewitness",
+      "footage",
+      "statement",
     ],
     health: [
-      'cure', 'miracle cure', 'doctors', 'vaccine', 'vaccines',
-      'big pharma', 'fda', 'side effects', 'cancer', 'diabetes',
-      'weight loss', 'supplement', 'supplements', 'detox', 'immune system',
-      'anti-vax', 'antivax', 'fluoride', 'autism', 'study finds',
-      'scientists warn', 'wellness', 'nutrition', 'medication', 'health',
+      "cure",
+      "miracle cure",
+      "doctors",
+      "vaccine",
+      "vaccines",
+      "big pharma",
+      "fda",
+      "side effects",
+      "cancer",
+      "diabetes",
+      "weight loss",
+      "supplement",
+      "supplements",
+      "detox",
+      "immune system",
+      "anti-vax",
+      "antivax",
+      "fluoride",
+      "autism",
+      "study finds",
+      "scientists warn",
+      "wellness",
+      "nutrition",
+      "medication",
+      "health",
     ],
     finance: [
-      'stock', 'stocks', 'market crash', 'crash', 'economy', 'economic',
-      'recession', 'inflation', 'gdp', 'federal reserve', 'interest rates',
-      'tax', 'taxes', 'investment', 'investments', 'crypto', 'bitcoin',
-      'ethereum', 'nft', 'get rich', 'millionaire', 'billionaire',
-      'debt', 'loan', 'mortgage', 'bankruptcy', 'ponzi', 'pyramid scheme',
-      'scam', 'fraud', 'insider trading',
+      "stock",
+      "stocks",
+      "market crash",
+      "crash",
+      "economy",
+      "economic",
+      "recession",
+      "inflation",
+      "gdp",
+      "federal reserve",
+      "interest rates",
+      "tax",
+      "taxes",
+      "investment",
+      "investments",
+      "crypto",
+      "bitcoin",
+      "ethereum",
+      "nft",
+      "get rich",
+      "millionaire",
+      "billionaire",
+      "debt",
+      "loan",
+      "mortgage",
+      "bankruptcy",
+      "ponzi",
+      "pyramid scheme",
+      "scam",
+      "fraud",
+      "insider trading",
     ],
     politics: [
-      'election', 'elections', 'president', 'presidential', 'voter',
-      'voting', 'ballot', 'candidate', 'senator', 'congress',
-      'parliament', 'prime minister', 'lawmaker', 'executive order',
-      'impeachment', 'immigration', 'border', 'dictator', 'regime',
-      'protest', 'coup', 'scandal', 'partisan', 'democrat', 'republican',
-      'conservative', 'liberal', 'left-wing', 'right-wing', 'politics',
+      "election",
+      "elections",
+      "president",
+      "presidential",
+      "voter",
+      "voting",
+      "ballot",
+      "candidate",
+      "senator",
+      "congress",
+      "parliament",
+      "prime minister",
+      "lawmaker",
+      "executive order",
+      "impeachment",
+      "immigration",
+      "border",
+      "dictator",
+      "regime",
+      "protest",
+      "coup",
+      "scandal",
+      "partisan",
+      "democrat",
+      "republican",
+      "conservative",
+      "liberal",
+      "left-wing",
+      "right-wing",
+      "politics",
     ],
   },
 };
@@ -64,10 +147,7 @@ export interface VideoMeta {
 }
 
 /** Reason a lookup fired (or didn't) — used in debug logging. */
-export type TriggerReason =
-  | 'fake-lean'
-  | 'topic-keyword'
-  | 'no-trigger';
+export type TriggerReason = "fake-lean" | "topic-keyword" | "no-trigger";
 
 /** Outcome of evaluating the trigger. */
 export interface TriggerDecision {
@@ -80,7 +160,7 @@ export interface TriggerDecision {
 }
 
 /** Stamp tiers that lean "fabricated premise". */
-const FAKE_LEAN_TIERS = new Set(['fake']);
+const FAKE_LEAN_TIERS = new Set(["fake"]);
 
 /**
  * Cheap keyword test — whole-word for single words, substring for phrases.
@@ -91,7 +171,7 @@ function textMatchesKeywords(
   keywords: readonly string[],
 ): string | null {
   for (const keyword of keywords) {
-    if (keyword.includes(' ')) {
+    if (keyword.includes(" ")) {
       if (lowerHaystack.includes(keyword)) return keyword;
     } else if (tokens.has(keyword)) {
       return keyword;
@@ -113,23 +193,29 @@ export function shouldLookup(
   config: TopicKeywordConfig = DEFAULT_TOPIC_KEYWORDS,
 ): TriggerDecision {
   // 1. FAKE-leaning preliminary stamp — trivially cheap check.
-  if (meta.preliminaryStamp != null && FAKE_LEAN_TIERS.has(meta.preliminaryStamp)) {
-    return { should: true, reason: 'fake-lean' };
+  if (
+    meta.preliminaryStamp != null &&
+    FAKE_LEAN_TIERS.has(meta.preliminaryStamp)
+  ) {
+    return { should: true, reason: "fake-lean" };
   }
 
   // 2. Claim-heavy topic keyword check.
-  const combined = `${meta.title}\n${meta.description ?? ''}`;
+  const combined = `${meta.title}\n${meta.description ?? ""}`;
   const lowerHaystack = combined.toLowerCase();
-  const tokens = new Set(
-    lowerHaystack.split(/[^a-z0-9']+/).filter(Boolean),
-  );
+  const tokens = new Set(lowerHaystack.split(/[^a-z0-9']+/).filter(Boolean));
 
   for (const [topic, keywords] of Object.entries(config.topics)) {
     const matched = textMatchesKeywords(lowerHaystack, tokens, keywords);
     if (matched != null) {
-      return { should: true, reason: 'topic-keyword', matchedTopic: topic, matchedKeyword: matched };
+      return {
+        should: true,
+        reason: "topic-keyword",
+        matchedTopic: topic,
+        matchedKeyword: matched,
+      };
     }
   }
 
-  return { should: false, reason: 'no-trigger' };
+  return { should: false, reason: "no-trigger" };
 }

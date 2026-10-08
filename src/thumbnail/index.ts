@@ -16,16 +16,16 @@ import {
   parseStoryboardSpec,
   selectLevel,
   type PlayerStoryboardSpec,
-} from './storyboard';
-import { selectTile } from './frame';
-import { cropTile } from './render';
-import { fetchPlayerResponse } from './innertube';
-import { ThumbnailCache } from '../storage/thumbnail-cache';
-import type { FramePosition } from './types';
+} from "./storyboard";
+import { selectTile } from "./frame";
+import { cropTile } from "./render";
+import { fetchPlayerResponse } from "./innertube";
+import { ThumbnailCache } from "../storage/thumbnail-cache";
+import type { FramePosition } from "./types";
 
 const SPEC_TTL_MS = 90 * 864e5;
-const SPEC_DB = 'nobait-sprites';
-const SPEC_STORE = 'specs';
+const SPEC_DB = "nobait-sprites";
+const SPEC_STORE = "specs";
 /** Preferred minimum tile width — matches YouTube's L2/L3 320px tiles. */
 const MIN_TILE_WIDTH = 320;
 
@@ -43,7 +43,7 @@ function openSpecDb(): Promise<IDBDatabase> {
       }
     };
     req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error ?? new Error('idb open failed'));
+    req.onerror = () => reject(req.error ?? new Error("idb open failed"));
   });
 }
 
@@ -51,11 +51,14 @@ async function specGet(videoId: string): Promise<PlayerStoryboardSpec | null> {
   try {
     const db = await openSpecDb();
     const spec = await new Promise<PlayerStoryboardSpec | null>((resolve) => {
-      const tx = db.transaction(SPEC_STORE, 'readonly');
+      const tx = db.transaction(SPEC_STORE, "readonly");
       const req = tx.objectStore(SPEC_STORE).get(videoId);
       req.onsuccess = () => {
         const entry = req.result as SpecEntry | undefined;
-        const parsed = entry && entry.expiresAt > Date.now() ? parseStoryboardSpec(entry.spec) : null;
+        const parsed =
+          entry && entry.expiresAt > Date.now()
+            ? parseStoryboardSpec(entry.spec)
+            : null;
         resolve(parsed);
       };
       req.onerror = () => resolve(null);
@@ -67,12 +70,18 @@ async function specGet(videoId: string): Promise<PlayerStoryboardSpec | null> {
   }
 }
 
-async function specPut(videoId: string, spec: PlayerStoryboardSpec): Promise<void> {
+async function specPut(
+  videoId: string,
+  spec: PlayerStoryboardSpec,
+): Promise<void> {
   try {
     const db = await openSpecDb();
     await new Promise<void>((resolve) => {
-      const tx = db.transaction(SPEC_STORE, 'readwrite');
-      tx.objectStore(SPEC_STORE).put({ spec, expiresAt: Date.now() + SPEC_TTL_MS } satisfies SpecEntry, videoId);
+      const tx = db.transaction(SPEC_STORE, "readwrite");
+      tx.objectStore(SPEC_STORE).put(
+        { spec, expiresAt: Date.now() + SPEC_TTL_MS } satisfies SpecEntry,
+        videoId,
+      );
       tx.oncomplete = () => {
         db.close();
         resolve();
@@ -94,8 +103,10 @@ export class ThumbnailManager {
   private fetchImpl: typeof fetch;
   private position: FramePosition;
 
-  constructor(opts: { position?: FramePosition; fetchImpl?: typeof fetch } = {}) {
-    this.position = opts.position ?? { kind: 'middle' };
+  constructor(
+    opts: { position?: FramePosition; fetchImpl?: typeof fetch } = {},
+  ) {
+    this.position = opts.position ?? { kind: "middle" };
     // Bind the native fetch: storing it unbound and invoking it as a
     // method (`this.fetchImpl(...)`) detaches it from its Window receiver
     // and throws "Illegal invocation" in Chromium/Firefox.
@@ -132,7 +143,7 @@ export class ThumbnailManager {
       pending.map(async ({ id, p }) => {
         const url = await p.catch(() => null);
         if (url) results.set(id, url);
-      })
+      }),
     );
     return results;
   }
@@ -144,7 +155,11 @@ export class ThumbnailManager {
 
     // 2. Frame math (deterministic).
     const level = selectLevel(spec, MIN_TILE_WIDTH);
-    const { frameIndex, sheet, rect } = selectTile(videoId, this.position, level);
+    const { frameIndex, sheet, rect } = selectTile(
+      videoId,
+      this.position,
+      level,
+    );
 
     // 3. Composed-blob cache hit → instant object URL.
     const cached = await this.cache.get(videoId, frameIndex);
@@ -165,7 +180,9 @@ export class ThumbnailManager {
     return URL.createObjectURL(out);
   }
 
-  private async fetchSpec(videoId: string): Promise<PlayerStoryboardSpec | null> {
+  private async fetchSpec(
+    videoId: string,
+  ): Promise<PlayerStoryboardSpec | null> {
     try {
       const pr = await fetchPlayerResponse(videoId, this.fetchImpl);
       const spec = parseStoryboardSpec(pr);
@@ -181,7 +198,7 @@ export class ThumbnailManager {
   private loadSprite(url: string): Promise<Blob | null> {
     let p = this.spriteLoads.get(url);
     if (!p) {
-      p = this.fetchImpl(url, { credentials: 'omit' })
+      p = this.fetchImpl(url, { credentials: "omit" })
         .then(async (r) => (r.ok ? r.blob() : null))
         .catch(() => null);
       this.spriteLoads.set(url, p);

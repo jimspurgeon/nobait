@@ -80,8 +80,14 @@ export const CLASSIFY_SYSTEM_PROMPT = SYSTEM_RULES.join("\n");
  * or huge YouTube DOM data can neither break JSON nor blow the token budget.
  * Pure — returns a new string; input is never mutated (unit-tested).
  */
-export function sanitize(text: string, maxChars: number = MAX_FIELD_CHARS): string {
-  const flat = text.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
+export function sanitize(
+  text: string,
+  maxChars: number = MAX_FIELD_CHARS,
+): string {
+  const flat = text
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   return flat.length > maxChars ? flat.slice(0, maxChars - 1) + "…" : flat;
 }
 
@@ -105,7 +111,9 @@ export function toPromptVideo(video: VideoSignal): Record<string, string> {
   }
   if (video.chapters !== undefined && video.chapters.length > 0) {
     out.chapters = sanitize(
-      video.chapters.map((c) => `${Math.floor(c.startMs / 1000)}s ${c.title}`).join("; "),
+      video.chapters
+        .map((c) => `${Math.floor(c.startMs / 1000)}s ${c.title}`)
+        .join("; "),
       600,
     );
   }
@@ -132,7 +140,9 @@ export function buildBatchUserPrompt(batch: readonly VideoSignal[]): string {
  */
 export function extractJsonArray(raw: string): unknown[] | null {
   // strip markdown fences if present (```json ... ``` or ``` ... ```)
-  const unfenced = raw.replace(/^\s*```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "");
+  const unfenced = raw
+    .replace(/^\s*```(?:json)?\s*/i, "")
+    .replace(/\s*```\s*$/, "");
   const start = unfenced.indexOf("[");
   const end = unfenced.lastIndexOf("]");
   if (start === -1 || end === -1 || end <= start) return null;
@@ -153,7 +163,11 @@ function coerceVerdict(entry: unknown): ParsedVerdict | null {
   if (typeof entry !== "object" || entry === null) return null;
   const rec = entry as Record<string, unknown>;
   const { id, title, tier, reason } = rec;
-  if (typeof id !== "string" || typeof title !== "string" || typeof reason !== "string") {
+  if (
+    typeof id !== "string" ||
+    typeof title !== "string" ||
+    typeof reason !== "string"
+  ) {
     return null;
   }
   if (!isStampTier(tier)) return null;
@@ -233,7 +247,10 @@ export function parseBatchResponse(
  * Parse a raw string into a StampTier with strict validation.
  * Any malformed value falls back to UNSURE.
  */
-export function parseStampTier(raw: unknown): { tier: StampTier; explanation?: string } {
+export function parseStampTier(raw: unknown): {
+  tier: StampTier;
+  explanation?: string;
+} {
   if (typeof raw !== "string") {
     return { tier: StampTier.UNSURE, explanation: "Stamp was not a string" };
   }
@@ -267,7 +284,7 @@ export function parseBatchItem(raw: unknown): {
   const explanation =
     typeof obj.stampExplanation === "string" && obj.stampExplanation.length > 0
       ? obj.stampExplanation
-      : stampParsed.explanation ?? "No explanation provided";
+      : (stampParsed.explanation ?? "No explanation provided");
   return {
     videoId: obj.videoId,
     rewrittenTitle: obj.rewrittenTitle,

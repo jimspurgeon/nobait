@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { CacheDB } from '../../storage/cache';
-import { StampTier, CacheEntry, NegativeCacheEntry } from '../../stamps/types';
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { CacheDB } from "../../storage/cache";
+import { StampTier, CacheEntry, NegativeCacheEntry } from "../../stamps/types";
 
 /**
  * Fake-IDB mock implementation with enough fidelity to test TTL expiration
@@ -22,20 +22,20 @@ class FakeIDB {
         deleted.add(key);
         return makeIDBRequest(undefined);
       },
-      openCursor: () => makeIDBRequest(null)
+      openCursor: () => makeIDBRequest(null),
     });
 
     const self = this;
     return {
       transaction: (storeName: string, _mode?: IDBTransactionMode) => ({
         objectStore: () =>
-          storeName === 'analysis'
+          storeName === "analysis"
             ? buildStore(self.analysis, new Set())
             : buildStore(self.negative, new Set()),
-        abort: () => {}
+        abort: () => {},
       }),
       close: () => {},
-      objectStoreNames: { contains: () => true }
+      objectStoreNames: { contains: () => true },
     } as unknown as IDBDatabase;
   }
 }
@@ -44,7 +44,7 @@ function makeIDBRequest(result: any): IDBRequest {
   const req = {
     onsuccess: null as null | (() => void),
     onerror: null as null | (() => void),
-    result
+    result,
   } as unknown as IDBRequest;
   setTimeout(() => (req as any).onsuccess?.(), 0);
   return req;
@@ -52,34 +52,39 @@ function makeIDBRequest(result: any): IDBRequest {
 
 const fake = new FakeIDB();
 
-vi.stubGlobal('indexedDB', {
+vi.stubGlobal("indexedDB", {
   open: () => {
-    const request: any = { onsuccess: null, onerror: null, onupgradeneeded: null, result: fake.buildMockDB() };
+    const request: any = {
+      onsuccess: null,
+      onerror: null,
+      onupgradeneeded: null,
+      result: fake.buildMockDB(),
+    };
     setTimeout(() => request.onsuccess?.(), 0);
     return request;
-  }
+  },
 });
 
 function makeEntry(overrides: Partial<CacheEntry> = {}): CacheEntry {
   return {
-    videoId: 'test-video',
+    videoId: "test-video",
     result: {
-      videoId: 'test-video',
-      rewrittenTitle: 'Honest Title',
+      videoId: "test-video",
+      rewrittenTitle: "Honest Title",
       stamp: StampTier.LEGITIMATE,
-      stampExplanation: 'Accurate framing',
+      stampExplanation: "Accurate framing",
       timestamp: Date.now(),
-      modelVersion: 'gemini-flash-lite-v1'
+      modelVersion: "gemini-flash-lite-v1",
     },
-    inputHash: 'abc123',
-    modelVersion: 'gemini-flash-lite-v1',
+    inputHash: "abc123",
+    modelVersion: "gemini-flash-lite-v1",
     createdAt: Date.now(),
     expiresAt: Date.now() + 86400000,
-    ...overrides
+    ...overrides,
   };
 }
 
-describe('CacheDB', () => {
+describe("CacheDB", () => {
   let cache: CacheDB;
 
   beforeEach(() => {
@@ -89,59 +94,62 @@ describe('CacheDB', () => {
     (cache as any).db = fake.buildMockDB();
   });
 
-  it('round-trips a positive entry', async () => {
-    const entry = makeEntry({ videoId: 'rt-video' });
-    fake.analysis.set('rt-video', entry);
+  it("round-trips a positive entry", async () => {
+    const entry = makeEntry({ videoId: "rt-video" });
+    fake.analysis.set("rt-video", entry);
 
-    const got = await cache.getAnalysis('rt-video', entry.modelVersion);
-    expect(got?.videoId).toBe('rt-video');
+    const got = await cache.getAnalysis("rt-video", entry.modelVersion);
+    expect(got?.videoId).toBe("rt-video");
     expect(got?.result.stamp).toBe(StampTier.LEGITIMATE);
   });
 
-  it('rejects expired entries and deletes them', async () => {
-    const entry = makeEntry({ videoId: 'expired-video', expiresAt: Date.now() - 1000 });
-    fake.analysis.set('expired-video', entry);
+  it("rejects expired entries and deletes them", async () => {
+    const entry = makeEntry({
+      videoId: "expired-video",
+      expiresAt: Date.now() - 1000,
+    });
+    fake.analysis.set("expired-video", entry);
 
-    const got = await cache.getAnalysis('expired-video', entry.modelVersion);
+    const got = await cache.getAnalysis("expired-video", entry.modelVersion);
     expect(got).toBeNull();
   });
 
-  it('invalidates entries when model version changes', async () => {
-    const entry = makeEntry({ videoId: 'mv-video', modelVersion: 'old-model' });
-    fake.analysis.set('mv-video', entry);
+  it("invalidates entries when model version changes", async () => {
+    const entry = makeEntry({ videoId: "mv-video", modelVersion: "old-model" });
+    fake.analysis.set("mv-video", entry);
 
-    const got = await cache.getAnalysis('mv-video', 'new-model');
+    const got = await cache.getAnalysis("mv-video", "new-model");
     expect(got).toBeNull();
   });
 
-  it('returns null for missing entries', async () => {
-    const got = await cache.getAnalysis('never-seen', 'gemini-flash-lite-v1');
+  it("returns null for missing entries", async () => {
+    const got = await cache.getAnalysis("never-seen", "gemini-flash-lite-v1");
     expect(got).toBeNull();
   });
 
-  it('rejects expired negative entries', async () => {
+  it("rejects expired negative entries", async () => {
     const neg: NegativeCacheEntry = {
-      videoId: 'neg-expired',
-      reason: 'no_transcript',
+      videoId: "neg-expired",
+      reason: "no_transcript",
       timestamp: Date.now() - 2 * 86400000,
-      ttlMs: 86400000
+      ttlMs: 86400000,
     };
-    fake.negative.set('neg-expired', neg);
+    fake.negative.set("neg-expired", neg);
 
-    const got = await cache.getNegative('neg-expired');
+    const got = await cache.getNegative("neg-expired");
     expect(got).toBeNull();
   });
 
-  it('returns live negative entries', async () => {
+  it("returns live negative entries", async () => {
     const neg: NegativeCacheEntry = {
-      videoId: 'neg-live',
-      reason: 'too_short',
+      videoId: "neg-live",
+      reason: "too_short",
       timestamp: Date.now(),
-      ttlMs: 86400000
+      ttlMs: 86400000,
     };
-    fake.negative.set('neg-live', neg);
+    fake.negative.set("neg-live", neg);
 
-    const got = await cache.getNegative('neg-live');
-    expect(got?.reason).toBe('too_short');
+    const got = await cache.getNegative("neg-live");
+    expect(got?.reason).toBe("too_short");
   });
 });

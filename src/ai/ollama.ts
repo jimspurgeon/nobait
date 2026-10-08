@@ -82,7 +82,10 @@ export class OllamaProvider implements AIProvider {
     this.timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.fetchFn = config.fetchFn ?? fetch;
     if (this.timeoutMs <= 0) {
-      throw err("constructor", `timeoutMs must be positive, got ${this.timeoutMs}`);
+      throw err(
+        "constructor",
+        `timeoutMs must be positive, got ${this.timeoutMs}`,
+      );
     }
   }
 
@@ -98,7 +101,9 @@ export class OllamaProvider implements AIProvider {
     }
   }
 
-  private async analyzeChunk(chunk: readonly VideoSignal[]): Promise<AnalysisResult[]> {
+  private async analyzeChunk(
+    chunk: readonly VideoSignal[],
+  ): Promise<AnalysisResult[]> {
     const messages: ChatMessage[] = [
       { role: "system", content: CLASSIFY_SYSTEM_PROMPT },
       { role: "user", content: buildBatchUserPrompt(chunk) },
@@ -108,18 +113,21 @@ export class OllamaProvider implements AIProvider {
 
     let raw: string;
     try {
-      const response = await this.fetchFn(`${this.baseUrl}/v1/chat/completions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: this.model,
-          messages,
-          // Low temperature: deterministic tier picks, no creativity wanted.
-          temperature: 0.1,
-          stream: false,
-        }),
-        signal: this.controller.signal,
-      });
+      const response = await this.fetchFn(
+        `${this.baseUrl}/v1/chat/completions`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: this.model,
+            messages,
+            // Low temperature: deterministic tier picks, no creativity wanted.
+            temperature: 0.1,
+            stream: false,
+          }),
+          signal: this.controller.signal,
+        },
+      );
 
       if (!response.ok) {
         // Non-JSON error pages are common (server down → HTML 502).
@@ -164,7 +172,10 @@ export class OllamaProvider implements AIProvider {
   }
 }
 
-function* chunkBatch<T>(items: readonly T[], size: number): Generator<readonly T[]> {
+function* chunkBatch<T>(
+  items: readonly T[],
+  size: number,
+): Generator<readonly T[]> {
   for (let i = 0; i < items.length; i += size) {
     yield items.slice(i, i + size);
   }

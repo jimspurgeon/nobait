@@ -1,8 +1,8 @@
-import { AIInput, StampResult } from '../stamps/types';
-import { aiProviderFactory } from '../ai/factory';
-import { MODEL_VERSION } from '../ai/gemini';
-import { parseStampTier } from '../ai/classify';
-import { cacheDB } from '../storage/cache';
+import { AIInput, StampResult } from "../stamps/types";
+import { aiProviderFactory } from "../ai/factory";
+import { MODEL_VERSION } from "../ai/gemini";
+import { parseStampTier } from "../ai/classify";
+import { cacheDB } from "../storage/cache";
 
 interface PendingRequest {
   input: AIInput;
@@ -16,25 +16,25 @@ interface PendingRequest {
  */
 export class EvaluationScheduler {
   private static instance: EvaluationScheduler;
-  
+
   /** Pending requests waiting to be batched (coalescing window) */
   private pending: Map<string, AIInput> = new Map();
-  
+
   /** In-flight promises per videoId (deduplication) */
   private inflight: Map<string, Promise<StampResult | null>> = new Map();
-  
+
   /** Timer for the coalescing window */
   private coalesceTimer: ReturnType<typeof setTimeout> | null = null;
-  
+
   /** Pending promise callbacks */
   private pendingPromises: PendingRequest[] = [];
-  
+
   /** Max videos per batch request */
   private readonly MAX_BATCH_SIZE = 20;
-  
+
   /** Coalescing window in ms */
   private readonly COALESCE_WINDOW_MS = 50;
-  
+
   /** Listeners for incremental (streaming) results */
   private resultListeners: Set<(result: StampResult) => void> = new Set();
 
@@ -82,10 +82,10 @@ export class EvaluationScheduler {
     // Create the promise that all callers of this videoId share
     const promise = this.enqueueAndFlush(input);
     this.inflight.set(input.videoId, promise);
-    
+
     // Clean up inflight entry when settled
     promise.finally(() => this.inflight.delete(input.videoId)).catch(() => {});
-    
+
     return promise;
   }
 
@@ -132,21 +132,36 @@ export class EvaluationScheduler {
       for (let i = 0; i < inputs.length; i += this.MAX_BATCH_SIZE) {
         const chunk = inputs.slice(i, i + this.MAX_BATCH_SIZE);
         const chunkQueue = queued.filter((req) =>
-          chunk.some((c) => c.videoId === req.input.videoId)
+          chunk.some((c) => c.videoId === req.input.videoId),
         );
 
-        const resultMap = new Map<string, { videoId: string; rewrittenTitle: string; stamp: string; stampExplanation: string }>();
+        const resultMap = new Map<
+          string,
+          {
+            videoId: string;
+            rewrittenTitle: string;
+            stamp: string;
+            stampExplanation: string;
+          }
+        >();
 
         for await (const result of provider.analyzeBatch(chunk)) {
-          const partial: { videoId: string; rewrittenTitle: string; stamp: string; stampExplanation: string } = {
+          const partial: {
+            videoId: string;
+            rewrittenTitle: string;
+            stamp: string;
+            stampExplanation: string;
+          } = {
             videoId: result.videoId,
             rewrittenTitle: result.rewrittenTitle,
             stamp: result.stamp,
-            stampExplanation: result.stampExplanation
+            stampExplanation: result.stampExplanation,
           };
           resultMap.set(partial.videoId, partial);
 
-          const req = chunkQueue.find((r) => r.input.videoId === partial.videoId);
+          const req = chunkQueue.find(
+            (r) => r.input.videoId === partial.videoId,
+          );
           if (req && !handledVideoIds.has(partial.videoId)) {
             handledVideoIds.add(partial.videoId);
             await this.deliverResult(req, partial);
@@ -158,9 +173,9 @@ export class EvaluationScheduler {
             // AI didn't return a result for this video
             await cacheDB.setNegative({
               videoId: req.input.videoId,
-              reason: 'unavailable',
+              reason: "unavailable",
               timestamp: Date.now(),
-              ttlMs: 24 * 60 * 60 * 1000
+              ttlMs: 24 * 60 * 60 * 1000,
             });
             req.resolve(null);
           }
@@ -168,8 +183,8 @@ export class EvaluationScheduler {
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      console.error('[nobait] Batch evaluation failed:', errorMessage);
-      
+      console.error("[nobait] Batch evaluation failed:", errorMessage);
+
       // Reject all pending requests
       for (const req of queued) {
         req.reject(err instanceof Error ? err : new Error(errorMessage));
@@ -186,7 +201,12 @@ export class EvaluationScheduler {
    */
   private async deliverResult(
     req: PendingRequest,
-    partial: { videoId: string; rewrittenTitle: string; stamp: string; stampExplanation: string }
+    partial: {
+      videoId: string;
+      rewrittenTitle: string;
+      stamp: string;
+      stampExplanation: string;
+    },
   ): Promise<void> {
     const stampResult: StampResult = {
       videoId: partial.videoId,
@@ -194,7 +214,7 @@ export class EvaluationScheduler {
       stamp: parseStampTier(partial.stamp).tier,
       stampExplanation: partial.stampExplanation,
       timestamp: Date.now(),
-      modelVersion: MODEL_VERSION
+      modelVersion: MODEL_VERSION,
     };
 
     // Cache the result
@@ -204,7 +224,7 @@ export class EvaluationScheduler {
       inputHash: this.computeInputHash(req.input),
       modelVersion: MODEL_VERSION,
       createdAt: Date.now(),
-      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 // 7 days TTL
+      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days TTL
     });
 
     // Notify listeners (streaming-like incremental delivery)
@@ -213,11 +233,11 @@ export class EvaluationScheduler {
   }
 
   private computeInputHash(input: AIInput): string {
-    const str = `${input.title}|${input.description || ''}|${input.transcript || ''}|${JSON.stringify(input.chapters)}`;
+    const str = `${input.title}|${input.description || ""}|${input.transcript || ""}|${JSON.stringify(input.chapters)}`;
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
       const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash = hash & hash;
     }
     return hash.toString(16);
@@ -231,7 +251,7 @@ export class EvaluationScheduler {
       try {
         listener(result);
       } catch (err) {
-        console.error('[nobait] Result listener error:', err);
+        console.error("[nobait] Result listener error:", err);
       }
     }
   }

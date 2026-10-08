@@ -6,8 +6,8 @@
  * never from Math.random().
  */
 
-import type { StoryboardLevel } from './storyboard';
-import type { FramePosition } from './types';
+import type { StoryboardLevel } from "./storyboard";
+import type { FramePosition } from "./types";
 
 /** FNV-1a 32-bit hash → unsigned int seed. */
 export function hashSeed(str: string): number {
@@ -54,7 +54,7 @@ export function sheetFor(level: StoryboardLevel, frameIndex: number): number {
 export function frameIndexForPosition(
   videoId: string,
   position: FramePosition,
-  level: StoryboardLevel
+  level: StoryboardLevel,
 ): number {
   const total = totalFrames(level);
   const frac = positionFraction(videoId, position);
@@ -63,18 +63,18 @@ export function frameIndexForPosition(
 
 function positionFraction(videoId: string, position: FramePosition): number {
   switch (position.kind) {
-    case 'start':
+    case "start":
       return 0.1;
-    case 'middle':
+    case "middle":
       return 0.5;
-    case 'end':
+    case "end":
       return 0.9;
-    case 'random': {
+    case "random": {
       const rand = prng(hashSeed(`${videoId}:frame`))();
       // Middle 80% band [0.1, 0.9).
       return 0.1 + rand * 0.8;
     }
-    case 'percent': {
+    case "percent": {
       const p = Number(position.value);
       return Number.isFinite(p) ? clamp(p, 0, 1) : 0.5;
     }
@@ -83,7 +83,8 @@ function positionFraction(videoId: string, position: FramePosition): number {
   }
 }
 
-const clamp = (n: number, lo: number, hi: number): number => (n < lo ? lo : n > hi ? hi : n);
+const clamp = (n: number, lo: number, hi: number): number =>
+  n < lo ? lo : n > hi ? hi : n;
 
 export interface TileRect {
   /** px in the sprite sheet of the x,y origin of the tile. */
@@ -101,7 +102,7 @@ export interface TileRect {
  */
 export function tileFor(
   level: StoryboardLevel,
-  frameIndex: number
+  frameIndex: number,
 ): { sheet: number; rect: TileRect } {
   const sheet = sheetFor(level, frameIndex);
   const idxInSheet = frameIndex - sheet * level.framesPerSheet;
@@ -125,7 +126,7 @@ export function tileFor(
 export function selectTile(
   videoId: string,
   position: FramePosition,
-  level: StoryboardLevel
+  level: StoryboardLevel,
 ): { frameIndex: number; sheet: number; rect: TileRect } {
   const frameIndex = frameIndexForPosition(videoId, position, level);
   const { sheet, rect } = tileFor(level, frameIndex);

@@ -488,7 +488,8 @@ export type { AnimMode };
  */
 
 const prefersReducedMotion = (): boolean =>
-  typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  typeof matchMedia !== "undefined" &&
+  matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // ------------------------------------------------------------ img fades ----
 
@@ -527,19 +528,28 @@ function ensureFadeLoop(): void {
  * src can't flash the old image away mid-fade. Reduces to a plain src
  * replacement under reduced motion.
  */
-export function crossfadeImageSrc(img: HTMLImageElement, newSrc: string, durationMs = 250): void {
-  if (prefersReducedMotion() || !img.complete || img.getAttribute('src') === '' || img.naturalWidth === 0) {
+export function crossfadeImageSrc(
+  img: HTMLImageElement,
+  newSrc: string,
+  durationMs = 250,
+): void {
+  if (
+    prefersReducedMotion() ||
+    !img.complete ||
+    img.getAttribute("src") === "" ||
+    img.naturalWidth === 0
+  ) {
     img.src = newSrc;
     return;
   }
 
   const w = img.clientWidth || img.naturalWidth;
   const h = img.clientHeight || img.naturalHeight;
-  const canvas = document.createElement('canvas');
+  const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, w);
   canvas.height = Math.max(1, h);
   try {
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
   } catch {
     // CORS-tainted canvas — degrade to simple swap, never blank.
@@ -552,9 +562,13 @@ export function crossfadeImageSrc(img: HTMLImageElement, newSrc: string, duratio
     img.src = newSrc;
     return;
   }
-  canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;';
-  const anchor = (img.closest('ytd-thumbnail, .ytd-thumbnail') as HTMLElement | null) ?? parent;
-  if (getComputedStyle(anchor).position === 'static') anchor.style.position = 'relative';
+  canvas.style.cssText =
+    "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;";
+  const anchor =
+    (img.closest("ytd-thumbnail, .ytd-thumbnail") as HTMLElement | null) ??
+    parent;
+  if (getComputedStyle(anchor).position === "static")
+    anchor.style.position = "relative";
   anchor.appendChild(canvas);
 
   img.src = newSrc;
@@ -569,7 +583,7 @@ export function crossfadeImageSrc(img: HTMLImageElement, newSrc: string, duratio
  */
 export function batchCrossfade(
   swaps: Array<{ img: HTMLImageElement; src: string }>,
-  durationMs = 250
+  durationMs = 250,
 ): void {
   // Force a single synchronous layout read before mutating styles.
   for (const s of swaps) void s.img.naturalWidth;
@@ -604,9 +618,9 @@ function swapTick(now: number): void {
     job.to.style.opacity = String(t);
     job.from.style.opacity = String(1 - t);
     if (t >= 1) {
-      job.from.style.opacity = '0';
-      job.from.style.pointerEvents = 'none';
-      job.to.style.opacity = '1';
+      job.from.style.opacity = "0";
+      job.from.style.pointerEvents = "none";
+      job.to.style.opacity = "1";
       job.from.remove();
       finished.push(job);
     }
@@ -620,10 +634,14 @@ function swapTick(now: number): void {
  * Replace element `from` with `to` using a crossfade (caller positions
  * `to` over `from`). Shares the swap ticker with every other live swap.
  */
-export function crossfadeSwap(from: HTMLElement, to: HTMLElement, opts: SwapOptions = {}): void {
+export function crossfadeSwap(
+  from: HTMLElement,
+  to: HTMLElement,
+  opts: SwapOptions = {},
+): void {
   const duration = prefersReducedMotion() ? 0 : (opts.durationMs ?? 250);
   if (duration === 0) {
-    to.style.opacity = '1';
+    to.style.opacity = "1";
     from.remove();
     return;
   }
@@ -636,13 +654,13 @@ export function crossfadeSwap(from: HTMLElement, to: HTMLElement, opts: SwapOpti
  */
 export function fadeIn(el: HTMLElement, durationMs = 200): void {
   if (prefersReducedMotion()) {
-    el.style.opacity = '1';
+    el.style.opacity = "1";
     return;
   }
-  el.style.opacity = '0';
+  el.style.opacity = "0";
   el.animate([{ opacity: 0 }, { opacity: 1 }], {
     duration: durationMs,
-    easing: 'ease-out',
-    fill: 'forwards',
+    easing: "ease-out",
+    fill: "forwards",
   });
 }

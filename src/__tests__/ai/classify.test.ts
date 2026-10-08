@@ -1,4 +1,4 @@
-import { describe, it, test, expect } from 'vitest';
+import { describe, it, test, expect } from "vitest";
 import {
   parseStampTier,
   parseBatchItem,
@@ -8,21 +8,21 @@ import {
   sanitize,
   toPromptVideo,
   extractJsonArray,
-} from '../../ai/classify';
-import { StampTier } from '../../stamps/types';
-import type { VideoSignal } from '../../content/signals';
+} from "../../ai/classify";
+import { StampTier } from "../../stamps/types";
+import type { VideoSignal } from "../../content/signals";
 
-describe('classify - strict parsing', () => {
-  describe('parseStampTier', () => {
+describe("classify - strict parsing", () => {
+  describe("parseStampTier", () => {
     it.each([
-      ['legitimate', StampTier.LEGITIMATE],
-      ['exaggerated', StampTier.EXAGGERATED],
-      ['misleading', StampTier.MISLEADING],
-      ['clickbait', StampTier.CLICKBAIT],
-      ['fake', StampTier.FAKE],
-      ['unsure', StampTier.UNSURE],
-      ['LEGITIMATE', StampTier.LEGITIMATE],
-      [' Legitimate ', StampTier.LEGITIMATE],
+      ["legitimate", StampTier.LEGITIMATE],
+      ["exaggerated", StampTier.EXAGGERATED],
+      ["misleading", StampTier.MISLEADING],
+      ["clickbait", StampTier.CLICKBAIT],
+      ["fake", StampTier.FAKE],
+      ["unsure", StampTier.UNSURE],
+      ["LEGITIMATE", StampTier.LEGITIMATE],
+      [" Legitimate ", StampTier.LEGITIMATE],
     ])('parses valid tier "%s" → %s', (input, expected) => {
       const result = parseStampTier(input);
       expect(result.tier).toBe(expected);
@@ -30,74 +30,74 @@ describe('classify - strict parsing', () => {
     });
 
     it.each([
-      ['invalid'],
-      [''],
+      ["invalid"],
+      [""],
       [null],
       [undefined],
       [123],
-      ['LEGIT'],
-      ['click-bait'],
-    ] as const)('falls back to UNSURE for invalid input %s', (input) => {
+      ["LEGIT"],
+      ["click-bait"],
+    ] as const)("falls back to UNSURE for invalid input %s", (input) => {
       const result = parseStampTier(input);
       expect(result.tier).toBe(StampTier.UNSURE);
       expect(result.explanation).toBeDefined();
     });
   });
 
-  describe('parseBatchItem', () => {
-    it('parses a valid batch item', () => {
+  describe("parseBatchItem", () => {
+    it("parses a valid batch item", () => {
       const raw = {
-        videoId: 'abc123',
-        rewrittenTitle: 'Actual Title Here',
-        stamp: 'legitimate',
-        stampExplanation: 'Accurate and honest framing'
+        videoId: "abc123",
+        rewrittenTitle: "Actual Title Here",
+        stamp: "legitimate",
+        stampExplanation: "Accurate and honest framing",
       };
 
       const result = parseBatchItem(raw);
       expect(result).toEqual({
-        videoId: 'abc123',
-        rewrittenTitle: 'Actual Title Here',
+        videoId: "abc123",
+        rewrittenTitle: "Actual Title Here",
         stamp: StampTier.LEGITIMATE,
-        stampExplanation: 'Accurate and honest framing'
+        stampExplanation: "Accurate and honest framing",
       });
     });
 
-    it('defaults to UNSURE for malformed stamp', () => {
+    it("defaults to UNSURE for malformed stamp", () => {
       const raw = {
-        videoId: 'abc123',
-        rewrittenTitle: 'Actual Title Here',
-        stamp: 'not-a-valid-tier',
-        stampExplanation: 'Some explanation'
+        videoId: "abc123",
+        rewrittenTitle: "Actual Title Here",
+        stamp: "not-a-valid-tier",
+        stampExplanation: "Some explanation",
       };
 
       const result = parseBatchItem(raw);
       expect(result?.stamp).toBe(StampTier.UNSURE);
-      expect(result?.stampExplanation).toBe('Some explanation');
+      expect(result?.stampExplanation).toBe("Some explanation");
     });
 
-    it('falls back to generated explanation when stampExplanation missing', () => {
+    it("falls back to generated explanation when stampExplanation missing", () => {
       const result = parseBatchItem({
-        videoId: 'abc124',
-        rewrittenTitle: 'Actual Title Here',
-        stamp: 'garbage'
+        videoId: "abc124",
+        rewrittenTitle: "Actual Title Here",
+        stamp: "garbage",
       });
       expect(result?.stamp).toBe(StampTier.UNSURE);
-      expect(result?.stampExplanation).toContain('Unknown stamp');
+      expect(result?.stampExplanation).toContain("Unknown stamp");
     });
 
-    it('returns null for missing videoId', () => {
+    it("returns null for missing videoId", () => {
       const result = parseBatchItem({
-        videoId: '',
-        rewrittenTitle: 'Title',
-        stamp: 'legitimate',
-        stampExplanation: 'Explain'
+        videoId: "",
+        rewrittenTitle: "Title",
+        stamp: "legitimate",
+        stampExplanation: "Explain",
       });
       expect(result).toBeNull();
     });
 
-    it('returns null for non-object input', () => {
+    it("returns null for non-object input", () => {
       expect(parseBatchItem(null)).toBeNull();
-      expect(parseBatchItem('string')).toBeNull();
+      expect(parseBatchItem("string")).toBeNull();
       expect(parseBatchItem(123)).toBeNull();
     });
   });
@@ -111,7 +111,6 @@ describe('classify - strict parsing', () => {
  *   - parseBatchResponse() yields one verdict per input even on garbage;
  *   - malformed JSON, missing tiers, or unknown tiers → UNSURE fallback.
  */
-
 
 describe("sanitize()", () => {
   test("collapses control chars and newlines to spaces", () => {
@@ -160,7 +159,7 @@ describe("extractJsonArray()", () => {
   });
 
   test("strips markdown fences", () => {
-    expect(extractJsonArray("```json\n[{\"a\":1}]\n```")).toEqual([{ a: 1 }]);
+    expect(extractJsonArray('```json\n[{"a":1}]\n```')).toEqual([{ a: 1 }]);
   });
 
   test("returns null when no array exists", () => {
@@ -230,7 +229,7 @@ describe("parseBatchResponse() — malformed output → UNSURE fallback", () => 
 
   test("markdown fences + nonsense → UNSURE", () => {
     const results = parseBatchResponse(
-      '```json\nthis is not json at all\n```',
+      "```json\nthis is not json at all\n```",
       batch,
     );
     expect(results[0]!.stamp).toBe(StampTier.UNSURE);

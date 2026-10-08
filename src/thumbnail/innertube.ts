@@ -20,14 +20,16 @@ let warned = false;
  */
 export function getInnerTubeApiKey(): string | null {
   const candidates: Array<Record<string, unknown> | undefined | null> = [
-    (globalThis as Record<string, unknown>).ytcfg as Record<string, unknown> | undefined,
-    (globalThis as { wrappedJSObject?: { ytcfg?: Record<string, unknown> } }).wrappedJSObject?.ytcfg,
+    (globalThis as Record<string, unknown>).ytcfg as
+      Record<string, unknown> | undefined,
+    (globalThis as { wrappedJSObject?: { ytcfg?: Record<string, unknown> } })
+      .wrappedJSObject?.ytcfg,
   ];
   for (const cfg of candidates) {
     try {
-      if (cfg && typeof cfg.get === 'function') {
-        const key = (cfg.get as (k: string) => unknown)('INNERTUBE_API_KEY');
-        if (typeof key === 'string' && key.length > 0) return key;
+      if (cfg && typeof cfg.get === "function") {
+        const key = (cfg.get as (k: string) => unknown)("INNERTUBE_API_KEY");
+        if (typeof key === "string" && key.length > 0) return key;
       }
     } catch {
       /* try next candidate */
@@ -40,8 +42,8 @@ function warnDisabled(): void {
   if (warned) return;
   warned = true;
   console.warn(
-    '[nobait] ytcfg INNERTUBE_API_KEY unavailable — InnerTube fetching disabled; ' +
-      'thumbnail specs will come from cache only.'
+    "[nobait] ytcfg INNERTUBE_API_KEY unavailable — InnerTube fetching disabled; " +
+      "thumbnail specs will come from cache only.",
   );
 }
 
@@ -52,10 +54,10 @@ export function playerEndpointUrl(apiKey: string): string {
 
 const WEB_CONTEXT = {
   client: {
-    clientName: 'WEB',
-    clientVersion: '2.20240101.00.00',
-    hl: 'en',
-    gl: 'US',
+    clientName: "WEB",
+    clientVersion: "2.20240101.00.00",
+    hl: "en",
+    gl: "US",
   },
 } as const;
 
@@ -66,19 +68,21 @@ const WEB_CONTEXT = {
  */
 export async function fetchPlayerResponse(
   videoId: string,
-  fetchImpl: typeof fetch = fetch.bind(globalThis)
+  fetchImpl: typeof fetch = fetch.bind(globalThis),
 ): Promise<unknown> {
   const apiKey = getInnerTubeApiKey();
   if (!apiKey) {
     warnDisabled();
-    throw new Error('nobait/innertube: INNERTUBE_API_KEY unavailable at runtime');
+    throw new Error(
+      "nobait/innertube: INNERTUBE_API_KEY unavailable at runtime",
+    );
   }
 
   const resp = await fetchImpl(playerEndpointUrl(apiKey), {
-    method: 'POST',
-    credentials: 'omit',
+    method: "POST",
+    credentials: "omit",
     headers: {
-      'content-type': 'application/json',
+      "content-type": "application/json",
     },
     body: JSON.stringify({
       context: WEB_CONTEXT,

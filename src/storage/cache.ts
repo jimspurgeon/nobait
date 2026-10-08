@@ -1,18 +1,18 @@
-import { CacheEntry, NegativeCacheEntry } from '../stamps/types';
+import { CacheEntry, NegativeCacheEntry } from "../stamps/types";
 
 /**
  * IndexedDB wrapper for nobait cache
  * Handles TTL expiration and model-version invalidation
  */
 export class CacheDB {
-  private dbName = 'nobait-cache';
+  private dbName = "nobait-cache";
   private version = 1;
   private db: IDBDatabase | null = null;
-  
+
   // Store names
   private stores = {
-    ANALYSIS: 'analysis',
-    NEGATIVE: 'negative'
+    ANALYSIS: "analysis",
+    NEGATIVE: "negative",
   };
 
   /**
@@ -21,31 +21,31 @@ export class CacheDB {
   async init(): Promise<void> {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.dbName, this.version);
-      
+
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         this.db = request.result;
         resolve();
       };
-      
+
       request.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result;
-        
+
         // Analysis store: videoId -> CacheEntry
         if (!db.objectStoreNames.contains(this.stores.ANALYSIS)) {
           const analysisStore = db.createObjectStore(this.stores.ANALYSIS, {
-            keyPath: 'videoId'
+            keyPath: "videoId",
           });
-          analysisStore.createIndex('expiresAt', 'expiresAt');
-          analysisStore.createIndex('modelVersion', 'modelVersion');
+          analysisStore.createIndex("expiresAt", "expiresAt");
+          analysisStore.createIndex("modelVersion", "modelVersion");
         }
-        
+
         // Negative cache store: videoId -> NegativeCacheEntry
         if (!db.objectStoreNames.contains(this.stores.NEGATIVE)) {
           const negativeStore = db.createObjectStore(this.stores.NEGATIVE, {
-            keyPath: 'videoId'
+            keyPath: "videoId",
           });
-          negativeStore.createIndex('timestamp', 'timestamp');
+          negativeStore.createIndex("timestamp", "timestamp");
         }
       };
     });
@@ -66,13 +66,13 @@ export class CacheDB {
    */
   async setAnalysis(entry: CacheEntry): Promise<void> {
     if (!this.db) await this.init();
-    
+
     return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction(this.stores.ANALYSIS, 'readwrite');
+      const tx = this.db!.transaction(this.stores.ANALYSIS, "readwrite");
       const store = tx.objectStore(this.stores.ANALYSIS);
-      
+
       store.put(entry);
-      
+
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
@@ -81,22 +81,25 @@ export class CacheDB {
   /**
    * Get analysis result (checks TTL automatically)
    */
-  async getAnalysis(videoId: string, modelVersion: string): Promise<CacheEntry | null> {
+  async getAnalysis(
+    videoId: string,
+    modelVersion: string,
+  ): Promise<CacheEntry | null> {
     if (!this.db) await this.init();
-    
+
     return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction(this.stores.ANALYSIS, 'readonly');
+      const tx = this.db!.transaction(this.stores.ANALYSIS, "readonly");
       const store = tx.objectStore(this.stores.ANALYSIS);
       const request = store.get(videoId);
-      
+
       request.onsuccess = () => {
         const entry = request.result as CacheEntry | undefined;
-        
+
         if (!entry) {
           resolve(null);
           return;
         }
-        
+
         // Check expiration
         const now = Date.now();
         if (now > entry.expiresAt) {
@@ -105,16 +108,16 @@ export class CacheDB {
           resolve(null);
           return;
         }
-        
+
         // Check model version invalidation
         if (entry.modelVersion !== modelVersion) {
           resolve(null);
           return;
         }
-        
+
         resolve(entry);
       };
-      
+
       request.onerror = () => reject(request.error);
     });
   }
@@ -124,13 +127,13 @@ export class CacheDB {
    */
   async deleteAnalysis(videoId: string): Promise<void> {
     if (!this.db) await this.init();
-    
+
     return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction(this.stores.ANALYSIS, 'readwrite');
+      const tx = this.db!.transaction(this.stores.ANALYSIS, "readwrite");
       const store = tx.objectStore(this.stores.ANALYSIS);
-      
+
       store.delete(videoId);
-      
+
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
@@ -141,13 +144,13 @@ export class CacheDB {
    */
   async setNegative(entry: NegativeCacheEntry): Promise<void> {
     if (!this.db) await this.init();
-    
+
     return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction(this.stores.NEGATIVE, 'readwrite');
+      const tx = this.db!.transaction(this.stores.NEGATIVE, "readwrite");
       const store = tx.objectStore(this.stores.NEGATIVE);
-      
+
       store.put(entry);
-      
+
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
@@ -158,20 +161,20 @@ export class CacheDB {
    */
   async getNegative(videoId: string): Promise<NegativeCacheEntry | null> {
     if (!this.db) await this.init();
-    
+
     return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction(this.stores.NEGATIVE, 'readonly');
+      const tx = this.db!.transaction(this.stores.NEGATIVE, "readonly");
       const store = tx.objectStore(this.stores.NEGATIVE);
       const request = store.get(videoId);
-      
+
       request.onsuccess = () => {
         const entry = request.result as NegativeCacheEntry | undefined;
-        
+
         if (!entry) {
           resolve(null);
           return;
         }
-        
+
         // Check expiration
         const now = Date.now();
         const expiresAt = entry.timestamp + entry.ttlMs;
@@ -181,10 +184,10 @@ export class CacheDB {
           resolve(null);
           return;
         }
-        
+
         resolve(entry);
       };
-      
+
       request.onerror = () => reject(request.error);
     });
   }
@@ -194,13 +197,13 @@ export class CacheDB {
    */
   async deleteNegative(videoId: string): Promise<void> {
     if (!this.db) await this.init();
-    
+
     return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction(this.stores.NEGATIVE, 'readwrite');
+      const tx = this.db!.transaction(this.stores.NEGATIVE, "readwrite");
       const store = tx.objectStore(this.stores.NEGATIVE);
-      
+
       store.delete(videoId);
-      
+
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
@@ -214,17 +217,26 @@ export class CacheDB {
     const now = Date.now();
 
     await Promise.all([
-      this.cleanupStore(this.stores.ANALYSIS, (entry: CacheEntry) => now > entry.expiresAt),
-      this.cleanupStore(this.stores.NEGATIVE, (entry: NegativeCacheEntry) => now > entry.timestamp + entry.ttlMs)
+      this.cleanupStore(
+        this.stores.ANALYSIS,
+        (entry: CacheEntry) => now > entry.expiresAt,
+      ),
+      this.cleanupStore(
+        this.stores.NEGATIVE,
+        (entry: NegativeCacheEntry) => now > entry.timestamp + entry.ttlMs,
+      ),
     ]);
   }
 
   /**
    * Iterate a store's cursor and delete entries matching a predicate
    */
-  private cleanupStore(storeName: string, isExpired: (entry: any) => boolean): Promise<void> {
+  private cleanupStore(
+    storeName: string,
+    isExpired: (entry: any) => boolean,
+  ): Promise<void> {
     return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction(storeName, 'readwrite');
+      const tx = this.db!.transaction(storeName, "readwrite");
       const store = tx.objectStore(storeName);
       const request = store.openCursor();
 

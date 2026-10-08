@@ -3,11 +3,7 @@
  */
 
 import { describe, test, expect } from "vitest";
-import {
-  STAMP_LABELS,
-  STAMP_TIERS,
-  isStampTier,
-} from "../../stamps/types.js";
+import { STAMP_LABELS, STAMP_TIERS, isStampTier } from "../../stamps/types.js";
 
 describe("StampTier", () => {
   test("has exactly the six documented tiers", () => {

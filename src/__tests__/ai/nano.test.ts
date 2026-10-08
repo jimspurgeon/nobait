@@ -35,7 +35,9 @@ interface LanguageModelSessionLike {
   destroy: () => void;
 }
 
-async function collect(gen: AsyncIterable<AnalysisResult>): Promise<AnalysisResult[]> {
+async function collect(
+  gen: AsyncIterable<AnalysisResult>,
+): Promise<AnalysisResult[]> {
   const out: AnalysisResult[] = [];
   for await (const item of gen) out.push(item);
   return out;
@@ -43,7 +45,9 @@ async function collect(gen: AsyncIterable<AnalysisResult>): Promise<AnalysisResu
 
 /** Minimal viable LanguageModel mock with tracking spies. */
 function makeLMMock(opts: { promptResponse?: string; fail?: Error } = {}) {
-  const promptSpy = vi.fn(async (_input: string) => opts.promptResponse ?? "{}");
+  const promptSpy = vi.fn(
+    async (_input: string) => opts.promptResponse ?? "{}",
+  );
   const destroySpy = vi.fn();
   if (opts.fail) promptSpy.mockRejectedValue(opts.fail);
 
@@ -82,7 +86,9 @@ describe("NanoProvider — API absent (Firefox et al.)", () => {
     expect(results.length).toBe(2);
     for (const r of results) {
       expect(r.stamp).toBe(StampTier.UNSURE);
-      expect(r.rewrittenTitle).toBe(r.videoId === "nano_0" ? "Original 0" : "Original 1");
+      expect(r.rewrittenTitle).toBe(
+        r.videoId === "nano_0" ? "Original 0" : "Original 1",
+      );
       expect(r.stampExplanation.toLowerCase()).toContain("unavailable");
     }
   });
@@ -105,7 +111,9 @@ describe("NanoProvider — API present", () => {
   });
 
   test("creates session with system prompt and analyzes batch", async () => {
-    const { lm, promptSpy } = makeLMMock({ promptResponse: validJsonFor(mkBatch(2)) });
+    const { lm, promptSpy } = makeLMMock({
+      promptResponse: validJsonFor(mkBatch(2)),
+    });
     (globalThis as { LanguageModel?: unknown }).LanguageModel = lm;
 
     const p = new NanoProvider();
@@ -117,7 +125,12 @@ describe("NanoProvider — API present", () => {
     expect(lm.availability).toHaveBeenCalledTimes(1);
     expect(lm.create).toHaveBeenCalledTimes(1);
     const createCalls = lm.create.mock.calls as unknown as Array<
-      [{ initialPrompts?: Array<{ role: string; content: string }>; temperature?: number }]
+      [
+        {
+          initialPrompts?: Array<{ role: string; content: string }>;
+          temperature?: number;
+        },
+      ]
     >;
     const createOpts = createCalls[0]?.[0] ?? {};
     expect(createOpts.initialPrompts?.[0]?.role).toBe("system");
@@ -135,7 +148,9 @@ describe("NanoProvider — API present", () => {
   });
 
   test("malformed response → UNSURE + original title", async () => {
-    const { lm } = makeLMMock({ promptResponse: "I am a tiny model and I ramble" });
+    const { lm } = makeLMMock({
+      promptResponse: "I am a tiny model and I ramble",
+    });
     (globalThis as { LanguageModel?: unknown }).LanguageModel = lm;
 
     const p = new NanoProvider();
@@ -239,7 +254,9 @@ describe("NanoProvider — batches larger than MAX_BATCH_SIZE", () => {
       prompt: async (input: string) => {
         promptCount++;
         const jsonStart = input.indexOf("[");
-        const payload = JSON.parse(input.slice(jsonStart)) as Array<{ id: string }>;
+        const payload = JSON.parse(input.slice(jsonStart)) as Array<{
+          id: string;
+        }>;
         return JSON.stringify(
           payload.map((v) => ({
             id: v.id,

@@ -1,0 +1,1 @@
+var t=(e=>(e.LEGITIMATE="legitimate",e.EXAGGERATED="exaggerated",e.MISLEADING="misleading",e.CLICKBAIT="clickbait",e.FAKE="fake",e.UNSURE="unsure",e))(t||{});const i=Object.freeze(["legitimate","exaggerated","misleading","clickbait","fake","unsure"]);function n(e){return typeof e=="string"&&i.includes(e)}const s=i;export{t as S,s as V,n as i};

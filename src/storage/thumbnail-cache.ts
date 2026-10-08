@@ -7,8 +7,8 @@
  * object URL; misses return null so the caller composes it.
  */
 
-const DB_NAME = 'nobait-thumbnails';
-const STORE = 'thumbs';
+const DB_NAME = "nobait-thumbnails";
+const STORE = "thumbs";
 
 interface ThumbEntry {
   blob: Blob;
@@ -27,7 +27,7 @@ export class ThumbnailCache {
         }
       };
       req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error ?? new Error('idb open failed'));
+      req.onerror = () => reject(req.error ?? new Error("idb open failed"));
     });
     return this.db;
   }
@@ -40,8 +40,10 @@ export class ThumbnailCache {
     try {
       const db = await this.open();
       return await new Promise<Blob | null>((resolve) => {
-        const tx = db.transaction(STORE, 'readonly');
-        const req = tx.objectStore(STORE).get(ThumbnailCache.key(videoId, frameIndex));
+        const tx = db.transaction(STORE, "readonly");
+        const req = tx
+          .objectStore(STORE)
+          .get(ThumbnailCache.key(videoId, frameIndex));
         req.onsuccess = () => {
           const entry = req.result as ThumbEntry | undefined;
           resolve(entry && entry.expiresAt > Date.now() ? entry.blob : null);
@@ -57,10 +59,10 @@ export class ThumbnailCache {
     try {
       const db = await this.open();
       await new Promise<void>((resolve) => {
-        const tx = db.transaction(STORE, 'readwrite');
+        const tx = db.transaction(STORE, "readwrite");
         tx.objectStore(STORE).put(
           { blob, expiresAt: Date.now() + 90 * 864e5 } satisfies ThumbEntry,
-          ThumbnailCache.key(videoId, frameIndex)
+          ThumbnailCache.key(videoId, frameIndex),
         );
         tx.oncomplete = () => resolve();
         tx.onabort = () => resolve();
@@ -75,7 +77,7 @@ export class ThumbnailCache {
     try {
       const db = await this.open();
       await new Promise<void>((resolve) => {
-        const tx = db.transaction(STORE, 'readwrite');
+        const tx = db.transaction(STORE, "readwrite");
         tx.objectStore(STORE).clear();
         tx.oncomplete = () => resolve();
         tx.onerror = () => resolve();

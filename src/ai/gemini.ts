@@ -1,26 +1,34 @@
-import { parseBatchItem } from './classify';
-import type { AIProvider, AnalysisResult, BatchInput } from './types';
-import { StampTier, isStampTier } from '../stamps/types';
+import { parseBatchItem } from "./classify";
+import type { AIProvider, AnalysisResult, BatchInput } from "./types";
+import { StampTier, isStampTier } from "../stamps/types";
 
 /**
  * Current model version for cache invalidation
  * Bump this when changing prompts or models significantly
  */
-export const MODEL_VERSION = 'gemini-flash-lite-v1';
+export const MODEL_VERSION = "gemini-flash-lite-v1";
 
 /** Models we can fall back to, in preference order (Flash-Lite free tier) */
-const STAMP_ENUM = ['legitimate', 'exaggerated', 'misleading', 'clickbait', 'fake', 'unsure'];
+const STAMP_ENUM = [
+  "legitimate",
+  "exaggerated",
+  "misleading",
+  "clickbait",
+  "fake",
+  "unsure",
+];
 
 /**
  * Google AI Studio (Gemini) provider implementation
  * Uses gemini-2.5-flash-lite (Google AI Studio free tier)
  */
 export class GeminiProvider implements AIProvider {
-  readonly name = 'gemini';
+  readonly name = "gemini";
   readonly supportsStreaming = true;
 
   private apiKey: string | null = null;
-  private apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:streamGenerateContent';
+  private apiUrl =
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:streamGenerateContent";
   private timeoutMs = 30000;
 
   constructor(apiKey?: string) {
@@ -36,17 +44,23 @@ export class GeminiProvider implements AIProvider {
     try {
       const browserApi = (globalThis as any).browser;
       const chromeApi = (globalThis as any).chrome;
-      if (typeof browserApi !== 'undefined' && browserApi?.storage?.local) {
-        const result = await browserApi.storage.local.get(['geminiApiKey']);
+      if (typeof browserApi !== "undefined" && browserApi?.storage?.local) {
+        const result = await browserApi.storage.local.get(["geminiApiKey"]);
         this.apiKey = result.geminiApiKey || null;
-      } else if (typeof chromeApi !== 'undefined' && chromeApi?.storage?.local) {
+      } else if (
+        typeof chromeApi !== "undefined" &&
+        chromeApi?.storage?.local
+      ) {
         const result = await new Promise<Record<string, string>>((resolve) => {
-          chromeApi.storage.local.get(['geminiApiKey'], (r: Record<string, string>) => resolve(r));
+          chromeApi.storage.local.get(
+            ["geminiApiKey"],
+            (r: Record<string, string>) => resolve(r),
+          );
         });
         this.apiKey = result.geminiApiKey || null;
       }
     } catch (err) {
-      console.error('[nobait] Failed to load Gemini API key:', err);
+      console.error("[nobait] Failed to load Gemini API key:", err);
       this.apiKey = null;
     }
   }
@@ -58,9 +72,12 @@ export class GeminiProvider implements AIProvider {
     const browserApi = (globalThis as any).browser;
     const chromeApi = (globalThis as any).chrome;
     try {
-      if (typeof browserApi !== 'undefined' && browserApi?.storage?.local) {
+      if (typeof browserApi !== "undefined" && browserApi?.storage?.local) {
         await browserApi.storage.local.set({ geminiApiKey: key });
-      } else if (typeof chromeApi !== 'undefined' && chromeApi?.storage?.local) {
+      } else if (
+        typeof chromeApi !== "undefined" &&
+        chromeApi?.storage?.local
+      ) {
         await new Promise<void>((resolve, reject) => {
           chromeApi.storage.local.set({ geminiApiKey: key }, () => {
             if (chromeApi.runtime?.lastError) {
@@ -73,7 +90,7 @@ export class GeminiProvider implements AIProvider {
       }
       this.apiKey = key;
     } catch (err) {
-      console.error('[nobait] Failed to save Gemini API key:', err);
+      console.error("[nobait] Failed to save Gemini API key:", err);
       throw err;
     }
   }
@@ -83,21 +100,24 @@ export class GeminiProvider implements AIProvider {
    * Results are parsed chunk-by-chunk as they stream in; onPartialResult
    * fires for each video the moment its chunk completes.
    */
-  async analyzeBatchCallback(input: {
-    videos: Array<{
+  async analyzeBatchCallback(
+    input: {
+      videos: Array<{
+        videoId: string;
+        title: string;
+        description?: string;
+        transcript?: string;
+        chapters?: Array<{ startMs: number; title: string }>;
+      }>;
+      modelVersion: string;
+    },
+    onPartialResult?: (result: {
       videoId: string;
-      title: string;
-      description?: string;
-      transcript?: string;
-      chapters?: Array<{ startMs: number; title: string }>;
-    }>;
-    modelVersion: string;
-  }, onPartialResult?: (result: {
-    videoId: string;
-    rewrittenTitle: string;
-    stamp: string;
-    stampExplanation: string;
-  }) => void): Promise<{
+      rewrittenTitle: string;
+      stamp: string;
+      stampExplanation: string;
+    }) => void,
+  ): Promise<{
     results: Array<{
       videoId: string;
       rewrittenTitle: string;
@@ -108,12 +128,14 @@ export class GeminiProvider implements AIProvider {
     if (!this.apiKey) {
       await this.loadApiKey();
       if (!this.apiKey) {
-        throw new Error('[nobait] Gemini API key not configured');
+        throw new Error("[nobait] Gemini API key not configured");
       }
     }
 
     if (input.videos.length > 20) {
-      throw new Error(`[nobait] Batch too large: ${input.videos.length} videos (max 20)`);
+      throw new Error(
+        `[nobait] Batch too large: ${input.videos.length} videos (max 20)`,
+      );
     }
 
     const url = `${this.apiUrl}?key=${encodeURIComponent(this.apiKey)}`;
@@ -124,50 +146,59 @@ export class GeminiProvider implements AIProvider {
 
     try {
       const response = await fetch(url, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json'
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          contents: [{
-            parts: [{ text: prompt }]
-          }],
+          contents: [
+            {
+              parts: [{ text: prompt }],
+            },
+          ],
           generationConfig: {
             temperature: 0.3,
             topP: 0.8,
-            responseMimeType: 'application/json',
+            responseMimeType: "application/json",
             responseSchema: {
-              type: 'OBJECT',
+              type: "OBJECT",
               properties: {
                 results: {
-                  type: 'ARRAY',
+                  type: "ARRAY",
                   items: {
-                    type: 'OBJECT',
+                    type: "OBJECT",
                     properties: {
-                      videoId: { type: 'STRING' },
-                      rewrittenTitle: { type: 'STRING' },
-                      stamp: { type: 'STRING', enum: STAMP_ENUM },
-                      stampExplanation: { type: 'STRING' }
+                      videoId: { type: "STRING" },
+                      rewrittenTitle: { type: "STRING" },
+                      stamp: { type: "STRING", enum: STAMP_ENUM },
+                      stampExplanation: { type: "STRING" },
                     },
-                    required: ['videoId', 'rewrittenTitle', 'stamp', 'stampExplanation']
-                  }
-                }
+                    required: [
+                      "videoId",
+                      "rewrittenTitle",
+                      "stamp",
+                      "stampExplanation",
+                    ],
+                  },
+                },
               },
-              required: ['results']
-            }
-          }
+              required: ["results"],
+            },
+          },
         }),
-        signal: controller.signal
+        signal: controller.signal,
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`[nobait] Gemini API error: ${response.status} - ${errorText}`);
+        throw new Error(
+          `[nobait] Gemini API error: ${response.status} - ${errorText}`,
+        );
       }
 
       const reader = response.body?.getReader();
       if (!reader) {
-        throw new Error('[nobait] Cannot read response body');
+        throw new Error("[nobait] Cannot read response body");
       }
 
       // Incremental streaming parse: extract each video result the moment
@@ -185,7 +216,7 @@ export class GeminiProvider implements AIProvider {
 
       const results = streamParser.getResults();
       if (results.length === 0) {
-        throw new Error('[nobait] Failed to parse final JSON response');
+        throw new Error("[nobait] Failed to parse final JSON response");
       }
 
       return { results };
@@ -193,7 +224,6 @@ export class GeminiProvider implements AIProvider {
       clearTimeout(timeoutId);
     }
   }
-
 
   /**
    * Canonical AIProvider entry (P4 interface): yields AnalysisResults as
@@ -206,7 +236,7 @@ export class GeminiProvider implements AIProvider {
       title: v.title,
       description: v.description,
       transcript: v.transcript,
-      chapters: v.chapters?.map((c) => ({ ...c }))
+      chapters: v.chapters?.map((c) => ({ ...c })),
     }));
     const queue: AnalysisResult[] = [];
     let wakeup: (() => void) | undefined;
@@ -216,7 +246,7 @@ export class GeminiProvider implements AIProvider {
       (partial) => {
         queue.push(toAnalysisResult(partial));
         wakeup?.();
-      }
+      },
     );
 
     let settled = false;
@@ -234,7 +264,7 @@ export class GeminiProvider implements AIProvider {
         settled = true;
         failure = err;
         wakeup?.();
-      }
+      },
     );
 
     let delivered = 0;
@@ -256,24 +286,30 @@ export class GeminiProvider implements AIProvider {
   /**
    * Build structured prompt for batch analysis
    */
-  private buildBatchPrompt(videos: Array<{
-    videoId: string;
-    title: string;
-    description?: string;
-    transcript?: string;
-    chapters?: Array<{ startMs: number; title: string }>;
-  }>): string {
-    const videoDescriptions = videos.map((video, idx) => {
-      const desc = video.description ? `\nDescription: ${video.description.substring(0, 500)}` : '';
-      const chapters = video.chapters?.length
-        ? `\nChapters: ${video.chapters.map(c => `[${Math.round(c.startMs / 1000)}s] ${c.title}`).join(' | ')}`
-        : '';
-      const transcript = video.transcript
-        ? `\nTranscript (first 2000 chars):\n${video.transcript.substring(0, 2000)}`
-        : '';
+  private buildBatchPrompt(
+    videos: Array<{
+      videoId: string;
+      title: string;
+      description?: string;
+      transcript?: string;
+      chapters?: Array<{ startMs: number; title: string }>;
+    }>,
+  ): string {
+    const videoDescriptions = videos
+      .map((video, idx) => {
+        const desc = video.description
+          ? `\nDescription: ${video.description.substring(0, 500)}`
+          : "";
+        const chapters = video.chapters?.length
+          ? `\nChapters: ${video.chapters.map((c) => `[${Math.round(c.startMs / 1000)}s] ${c.title}`).join(" | ")}`
+          : "";
+        const transcript = video.transcript
+          ? `\nTranscript (first 2000 chars):\n${video.transcript.substring(0, 2000)}`
+          : "";
 
-      return `[Video ${idx + 1}] ID: ${video.videoId}\nTitle: ${video.title}${desc}${chapters}${transcript}`;
-    }).join('\n\n---\n\n');
+        return `[Video ${idx + 1}] ID: ${video.videoId}\nTitle: ${video.title}${desc}${chapters}${transcript}`;
+      })
+      .join("\n\n---\n\n");
 
     return `You are analyzing YouTube video metadata to generate factual titles and credibility ratings.
 
@@ -315,7 +351,7 @@ Respond with JSON only:`;
  * and emitted immediately via the callback.
  */
 export class IncrementalResultParser {
-  private buffer = '';
+  private buffer = "";
   private emittedIds = new Set<string>();
   private results: Array<{
     videoId: string;
@@ -331,7 +367,7 @@ export class IncrementalResultParser {
       rewrittenTitle: string;
       stamp: string;
       stampExplanation: string;
-    }) => void
+    }) => void,
   ) {}
 
   /**
@@ -352,7 +388,10 @@ export class IncrementalResultParser {
 
     if (this.results.length === 0) {
       // Fallback: try to parse the whole accumulated buffer as complete JSON
-      let jsonStr = this.buffer.trim().replace(/^```json\s*/i, '').replace(/\s*```$/i, '');
+      let jsonStr = this.buffer
+        .trim()
+        .replace(/^```json\s*/i, "")
+        .replace(/\s*```$/i, "");
       try {
         const parsed = JSON.parse(jsonStr);
         if (Array.isArray(parsed?.results)) {
@@ -383,20 +422,20 @@ export class IncrementalResultParser {
     // Locate the results array start
     const arrStart = this.buffer.indexOf('"results"');
     if (arrStart === -1) return;
-    const bracketPos = this.buffer.indexOf('[', arrStart);
+    const bracketPos = this.buffer.indexOf("[", arrStart);
     if (bracketPos === -1) return;
 
     let i = bracketPos + 1;
     while (i < this.buffer.length) {
       const ch = this.buffer[i];
 
-      if (ch === ']') {
+      if (ch === "]") {
         // End of the results array - everything inside has been emitted
         this.buffer = this.buffer.slice(0, bracketPos); // keep header, drop array
         return;
       }
 
-      if (ch === '{') {
+      if (ch === "{") {
         // Try to find the matching close brace for this object
         let depth = 0;
         let inString = false;
@@ -408,7 +447,7 @@ export class IncrementalResultParser {
             escape = false;
             continue;
           }
-          if (c === '\\') {
+          if (c === "\\") {
             if (inString) escape = true;
             continue;
           }
@@ -417,8 +456,8 @@ export class IncrementalResultParser {
             continue;
           }
           if (inString) continue;
-          if (c === '{') depth++;
-          else if (c === '}') {
+          if (c === "{") depth++;
+          else if (c === "}") {
             depth--;
             if (depth === 0) {
               end = j;
@@ -451,13 +490,13 @@ export class IncrementalResultParser {
       videoId: item.videoId,
       rewrittenTitle: item.rewrittenTitle,
       stamp: item.stamp,
-      stampExplanation: item.stampExplanation
+      stampExplanation: item.stampExplanation,
     });
     this.onPartialResult?.({
       videoId: item.videoId,
       rewrittenTitle: item.rewrittenTitle,
       stamp: item.stamp,
-      stampExplanation: item.stampExplanation
+      stampExplanation: item.stampExplanation,
     });
   }
 }
@@ -479,7 +518,9 @@ function toAnalysisResult(r: {
   return {
     videoId: r.videoId,
     rewrittenTitle: r.rewrittenTitle,
-    stamp: isStampTier(r.stamp) ? r.stamp : (parseBatchItem(r)?.stamp ?? StampTier.UNSURE),
-    stampExplanation: r.stampExplanation
+    stamp: isStampTier(r.stamp)
+      ? r.stamp
+      : (parseBatchItem(r)?.stamp ?? StampTier.UNSURE),
+    stampExplanation: r.stampExplanation,
   };
 }

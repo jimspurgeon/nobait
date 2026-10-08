@@ -4,18 +4,25 @@
  * 60 simultaneous renders stay inside a single rAF budget.
  */
 
-import type { VideoCard } from './dom';
-import type { FramePosition } from '../thumbnail/types';
-import { batchCrossfade } from './ui';
-import { ThumbnailManager } from '../thumbnail/index';
+import type { VideoCard } from "./dom";
+import type { FramePosition } from "../thumbnail/types";
+import { batchCrossfade } from "./ui";
+import { ThumbnailManager } from "../thumbnail/index";
 
 export class ThumbnailSwapper {
   private thumbMgr: ThumbnailManager;
   private visited = new Set<string>();
   private onDone?: (videoId: string) => void;
 
-  constructor(opts?: { position?: FramePosition; fetchImpl?: typeof fetch; onDone?: (videoId: string) => void }) {
-    this.thumbMgr = new ThumbnailManager({ position: opts?.position, fetchImpl: opts?.fetchImpl });
+  constructor(opts?: {
+    position?: FramePosition;
+    fetchImpl?: typeof fetch;
+    onDone?: (videoId: string) => void;
+  }) {
+    this.thumbMgr = new ThumbnailManager({
+      position: opts?.position,
+      fetchImpl: opts?.fetchImpl,
+    });
     this.onDone = opts?.onDone;
   }
 
@@ -31,7 +38,7 @@ export class ThumbnailSwapper {
     const byId = new Map<string, HTMLImageElement>();
     for (const c of cards) {
       if (!c.img || this.visited.has(c.videoId)) continue;
-      if (c.img.dataset.nobaitThumb === '1') {
+      if (c.img.dataset.nobaitThumb === "1") {
         this.visited.add(c.videoId);
         continue;
       }
@@ -44,7 +51,7 @@ export class ThumbnailSwapper {
     for (const [id, url] of urls.entries()) {
       const img = byId.get(id);
       if (!img || !img.isConnected) continue;
-      img.dataset.nobaitThumb = '1';
+      img.dataset.nobaitThumb = "1";
       swaps.push({ img, src: url });
       this.visited.add(id);
       this.onDone?.(id);
@@ -57,10 +64,10 @@ export class ThumbnailSwapper {
    * watch-page injection.
    */
   async inject(videoId: string, img: HTMLImageElement): Promise<void> {
-    if (this.visited.has(videoId) || img.dataset.nobaitThumb === '1') return;
+    if (this.visited.has(videoId) || img.dataset.nobaitThumb === "1") return;
     const url = await this.thumbMgr.getThumbUrl(videoId);
     if (!url) return;
-    img.dataset.nobaitThumb = '1';
+    img.dataset.nobaitThumb = "1";
     batchCrossfade([{ img, src: url }]);
     this.visited.add(videoId);
     this.onDone?.(videoId);

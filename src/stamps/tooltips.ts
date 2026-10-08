@@ -11,11 +11,14 @@ export interface TooltipOptions {
 /**
  * Create a tooltip element that appears on hover
  */
-export function createTooltip(text: string, options: TooltipOptions = {}): HTMLElement {
+export function createTooltip(
+  text: string,
+  options: TooltipOptions = {},
+): HTMLElement {
   const { maxWidth = 300, offsetX = 5, offsetY = 5 } = options;
 
-  const tooltip = document.createElement('div');
-  tooltip.className = 'nobait-tooltip';
+  const tooltip = document.createElement("div");
+  tooltip.className = "nobait-tooltip";
   tooltip.style.cssText = `
     position: absolute;
     max-width: ${maxWidth}px;
@@ -43,7 +46,11 @@ export function createTooltip(text: string, options: TooltipOptions = {}): HTMLE
 /**
  * Attach tooltip to a host element
  */
-export function attachTooltip(host: HTMLElement, text: string, options: TooltipOptions = {}): void {
+export function attachTooltip(
+  host: HTMLElement,
+  text: string,
+  options: TooltipOptions = {},
+): void {
   const tooltip = createTooltip(text, options);
   document.body.appendChild(tooltip);
 
@@ -52,20 +59,20 @@ export function attachTooltip(host: HTMLElement, text: string, options: TooltipO
     const { offsetX = 5, offsetY = 5 } = options;
     tooltip.style.left = `${rect.right + offsetX}px`;
     tooltip.style.top = `${rect.top + offsetY}px`;
-    tooltip.style.opacity = '1';
+    tooltip.style.opacity = "1";
   };
 
   const hide = () => {
-    tooltip.style.opacity = '0';
+    tooltip.style.opacity = "0";
   };
 
-  host.addEventListener('mouseenter', show);
-  host.addEventListener('mouseleave', hide);
+  host.addEventListener("mouseenter", show);
+  host.addEventListener("mouseleave", hide);
 
   // Cleanup function
   host._nobaitTooltipCleanup = () => {
-    host.removeEventListener('mouseenter', show);
-    host.removeEventListener('mouseleave', hide);
+    host.removeEventListener("mouseenter", show);
+    host.removeEventListener("mouseleave", hide);
     tooltip.remove();
   };
 }

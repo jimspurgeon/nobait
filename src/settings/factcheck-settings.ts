@@ -6,7 +6,7 @@
  * a strict no-op then, never an error.
  */
 
-const SETTINGS_KEY = 'nobait:factcheck-settings';
+const SETTINGS_KEY = "nobait:factcheck-settings";
 
 export interface FactCheckSettings {
   /** Google Fact Check Tools API key. */
@@ -29,11 +29,18 @@ export const DEFAULT_SETTINGS: Readonly<FactCheckSettings> = {
  * Resolve the WebExtensions API namespace portably (Firefox `browser`,
  * Chrome `chrome`), tolerating absence (unit tests).
  */
-function browserAPI(): {
-  storage?: { local?: { get?: (k: string) => Promise<Record<string, unknown>>; set?: (o: Record<string, unknown>) => Promise<void> } };
-} | undefined {
+function browserAPI():
+  | {
+      storage?: {
+        local?: {
+          get?: (k: string) => Promise<Record<string, unknown>>;
+          set?: (o: Record<string, unknown>) => Promise<void>;
+        };
+      };
+    }
+  | undefined {
   const g = globalThis as Record<string, unknown>;
-  return (g['browser'] ?? g['chrome']) as ReturnType<typeof browserAPI>;
+  return (g["browser"] ?? g["chrome"]) as ReturnType<typeof browserAPI>;
 }
 
 /**
@@ -43,22 +50,29 @@ export async function readSettings(): Promise<FactCheckSettings> {
   try {
     const api = browserAPI();
     const area = api?.storage?.local;
-    if (typeof area?.get !== 'function') return { ...DEFAULT_SETTINGS };
+    if (typeof area?.get !== "function") return { ...DEFAULT_SETTINGS };
 
     const bag = (await area.get(SETTINGS_KEY)) ?? {};
     const raw = (bag as Record<string, unknown>)[SETTINGS_KEY];
-    if (raw == null || typeof raw !== 'object') return { ...DEFAULT_SETTINGS };
+    if (raw == null || typeof raw !== "object") return { ...DEFAULT_SETTINGS };
 
     const r = raw as Record<string, unknown>;
     return {
-      apiKey: typeof r['apiKey'] === 'string' ? r['apiKey'] : DEFAULT_SETTINGS.apiKey,
-      enabled: typeof r['enabled'] === 'boolean' ? r['enabled'] : DEFAULT_SETTINGS.enabled,
-      timeoutMs: typeof r['timeoutMs'] === 'number' && Number.isFinite(r['timeoutMs']) && r['timeoutMs'] > 0
-        ? r['timeoutMs']
-        : DEFAULT_SETTINGS.timeoutMs,
+      apiKey:
+        typeof r["apiKey"] === "string" ? r["apiKey"] : DEFAULT_SETTINGS.apiKey,
+      enabled:
+        typeof r["enabled"] === "boolean"
+          ? r["enabled"]
+          : DEFAULT_SETTINGS.enabled,
+      timeoutMs:
+        typeof r["timeoutMs"] === "number" &&
+        Number.isFinite(r["timeoutMs"]) &&
+        r["timeoutMs"] > 0
+          ? r["timeoutMs"]
+          : DEFAULT_SETTINGS.timeoutMs,
     };
   } catch (err) {
-    console.warn('[nobait/factcheck] Failed to read settings:', err);
+    console.warn("[nobait/factcheck] Failed to read settings:", err);
     return { ...DEFAULT_SETTINGS };
   }
 }
@@ -66,16 +80,18 @@ export async function readSettings(): Promise<FactCheckSettings> {
 /**
  * Write updated settings to storage.
  */
-export async function writeSettings(update: Partial<FactCheckSettings>): Promise<void> {
+export async function writeSettings(
+  update: Partial<FactCheckSettings>,
+): Promise<void> {
   try {
     const api = browserAPI();
     const area = api?.storage?.local;
-    if (typeof area?.set !== 'function') return;
+    if (typeof area?.set !== "function") return;
 
     const merged = { ...(await readSettings()), ...update };
     await area.set({ [SETTINGS_KEY]: merged });
   } catch (err) {
-    console.warn('[nobait/factcheck] Failed to write settings:', err);
+    console.warn("[nobait/factcheck] Failed to write settings:", err);
   }
 }
 
@@ -85,8 +101,8 @@ export async function writeSettings(update: Partial<FactCheckSettings>): Promise
 export async function isLayerAvailable(): Promise<boolean> {
   const { enabled, apiKey } = await readSettings();
   if (!enabled) return false;
-  if (!apiKey || apiKey.trim() === '') {
-    console.debug('[nobait/factcheck] Layer disabled: no API key configured');
+  if (!apiKey || apiKey.trim() === "") {
+    console.debug("[nobait/factcheck] Layer disabled: no API key configured");
     return false;
   }
   return true;
@@ -97,7 +113,7 @@ export async function isLayerAvailable(): Promise<boolean> {
  */
 export async function getApiKey(): Promise<string | null> {
   const { apiKey } = await readSettings();
-  return apiKey && apiKey.trim() !== '' ? apiKey.trim() : null;
+  return apiKey && apiKey.trim() !== "" ? apiKey.trim() : null;
 }
 
 /**

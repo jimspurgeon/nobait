@@ -44,7 +44,9 @@ interface LanguageModelCreateOptions extends LanguageModelSessionOptions {
 
 export interface LanguageModel {
   /** Check readiness without downloading. */
-  availability(options?: LanguageModelSessionOptions): Promise<LangModelAvailability>;
+  availability(
+    options?: LanguageModelSessionOptions,
+  ): Promise<LangModelAvailability>;
   /** Create a chat session. */
   create(options: LanguageModelCreateOptions): Promise<LanguageModelSession>;
   /** Query params for the current device/model. */
@@ -194,7 +196,9 @@ export class NanoProvider implements AIProvider {
     }
   }
 
-  private async analyzeChunk(chunk: readonly VideoSignal[]): Promise<AnalysisResult[]> {
+  private async analyzeChunk(
+    chunk: readonly VideoSignal[],
+  ): Promise<AnalysisResult[]> {
     if (!this.session || this.fallbackOnly) {
       // Should not happen if initSession() was called successfully, but guard
       // defensively so a mid-stream crash doesn't take down the whole extension.
@@ -225,7 +229,10 @@ export class NanoProvider implements AIProvider {
     });
 
     try {
-      const raw = await Promise.race([this.session.prompt(userPrompt), timeoutRace]);
+      const raw = await Promise.race([
+        this.session.prompt(userPrompt),
+        timeoutRace,
+      ]);
       return parseBatchResponse(raw, chunk);
     } catch (cause) {
       // Session corruption → mark as unavailable for subsequent batches.
@@ -253,7 +260,10 @@ export class NanoProvider implements AIProvider {
 }
 
 /** Utility generator: split a batch into chunks of fixed size. */
-function* chunkBatch<T>(items: readonly T[], size: number): Generator<readonly T[]> {
+function* chunkBatch<T>(
+  items: readonly T[],
+  size: number,
+): Generator<readonly T[]> {
   for (let i = 0; i < items.length; i += size) {
     yield items.slice(i, i + size);
   }

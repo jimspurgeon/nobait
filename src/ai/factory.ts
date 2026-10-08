@@ -69,7 +69,10 @@ export function createProvider(config: AIProviderConfig): ProviderSelection {
   }
 
   // -- 2. Gemini (BYO key) --------------------------------------------------
-  if (config.geminiApiKey !== undefined && config.geminiApiKey.trim().length > 0) {
+  if (
+    config.geminiApiKey !== undefined &&
+    config.geminiApiKey.trim().length > 0
+  ) {
     if (config.createGeminiProvider === undefined) {
       console.warn(
         "[nobait] Gemini key set but no Gemini provider loader registered — skipping",
@@ -119,7 +122,6 @@ export function createProvider(config: AIProviderConfig): ProviderSelection {
     reason: "no provider available",
   };
 }
-
 
 // ---------------------------------------------------------------------------
 // P3-compatible singleton facade (background/scheduler + options wiring)

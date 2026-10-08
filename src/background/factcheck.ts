@@ -17,28 +17,27 @@
  * "no corroboration".
  */
 
-import { StampTier } from './factcheck-types.js';
-import {
-  searchClaims,
-} from './factcheck-client.js';
-import type { FactCheckClaim } from './factcheck-client.js';
-import { shouldLookup } from './factcheck-trigger.js';
-import { applyCorroboration } from './factcheck-corroborate.js';
-import type { CorroborationOutcome } from './factcheck-corroborate.js';
-import type { VideoMeta } from './factcheck-trigger.js';
-import {
-  readSettings,
-} from '../settings/factcheck-settings.js';
+import { StampTier } from "./factcheck-types.js";
+import { searchClaims } from "./factcheck-client.js";
+import type { FactCheckClaim } from "./factcheck-client.js";
+import { shouldLookup } from "./factcheck-trigger.js";
+import { applyCorroboration } from "./factcheck-corroborate.js";
+import type { CorroborationOutcome } from "./factcheck-corroborate.js";
+import type { VideoMeta } from "./factcheck-trigger.js";
+import { readSettings } from "../settings/factcheck-settings.js";
 
-export { shouldLookup } from './factcheck-trigger.js';
-export { classifyRating, parseClaimsSearchBody } from './factcheck-client.js';
-export { applyCorroboration, formatSourceLines } from './factcheck-corroborate.js';
-export { StampTier } from './factcheck-types.js';
+export { shouldLookup } from "./factcheck-trigger.js";
+export { classifyRating, parseClaimsSearchBody } from "./factcheck-client.js";
+export {
+  applyCorroboration,
+  formatSourceLines,
+} from "./factcheck-corroborate.js";
+export { StampTier } from "./factcheck-types.js";
 export type {
   FactCheckClaim,
   RatingCategory,
   ClaimsSearchResult,
-} from './factcheck-client.js';
+} from "./factcheck-client.js";
 export type { CorroborationOutcome, VideoMeta };
 
 /** Hard timeout for the lookup, per the performance budget (PLAN.md §1). */
@@ -61,21 +60,21 @@ export interface FactCheckDeps {
  * NEVER rejects: all failure paths resolve to `{ outcome: 'skipped' | 'timeout' | 'error', result: null }`.
  */
 export interface FactCheckEvaluation {
-  status: 'corroborated' | 'no-results' | 'skipped' | 'timeout' | 'error';
+  status: "corroborated" | "no-results" | "skipped" | "timeout" | "error";
   /** Present only when a lookup completed within the deadline. */
   result: CorroborationOutcome | null;
   /** True when the stamp was strengthened to FAKE by corroboration. */
   strengthened: boolean;
   /** Why the layer skipped (debug logging; null when it ran). */
-  skipReason?: 'disabled' | 'no-api-key' | 'no-trigger';
+  skipReason?: "disabled" | "no-api-key" | "no-trigger";
 }
 
 /** Skipped evaluation singleton (no allocation churn for the common path). */
 const SKIPPED_NO_TRIGGER: FactCheckEvaluation = {
-  status: 'skipped',
+  status: "skipped",
   result: null,
   strengthened: false,
-  skipReason: 'no-trigger',
+  skipReason: "no-trigger",
 };
 
 /**
@@ -98,7 +97,7 @@ function noChange(currentStamp: StampTier): CorroborationOutcome {
  */
 function buildQuery(meta: VideoMeta): string {
   const title = meta.title
-    .replace(/\s*[|(][^)|]*[)]?\s*$/, '') // trailing "(video)" / "| channel" segments
+    .replace(/\s*[|(][^)|]*[)]?\s*$/, "") // trailing "(video)" / "| channel" segments
     .trim();
   return title.slice(0, 120);
 }
@@ -119,13 +118,23 @@ export async function evaluateFactCheck(
 
   // Gate 1: API key plumbing — absent key disables the layer entirely.
   if (!settings.enabled) {
-    console.debug('[nobait/factcheck] Layer disabled via settings');
-    return { status: 'skipped', result: null, strengthened: false, skipReason: 'disabled' };
+    console.debug("[nobait/factcheck] Layer disabled via settings");
+    return {
+      status: "skipped",
+      result: null,
+      strengthened: false,
+      skipReason: "disabled",
+    };
   }
-  const apiKey = settings.apiKey?.trim() ?? '';
-  if (apiKey === '') {
-    console.debug('[nobait/factcheck] Layer disabled: no API key configured');
-    return { status: 'skipped', result: null, strengthened: false, skipReason: 'no-api-key' };
+  const apiKey = settings.apiKey?.trim() ?? "";
+  if (apiKey === "") {
+    console.debug("[nobait/factcheck] Layer disabled: no API key configured");
+    return {
+      status: "skipped",
+      result: null,
+      strengthened: false,
+      skipReason: "no-api-key",
+    };
   }
 
   // Gate 2: trigger heuristic — cheap keyword check first, no API call for
@@ -145,7 +154,11 @@ export async function evaluateFactCheck(
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
   // Build fetch promise that catches all errors (including abort)
-  const fetchPromise: Promise<{ ok: boolean; claims: FactCheckClaim[]; errored: boolean }> = (async () => {
+  const fetchPromise: Promise<{
+    ok: boolean;
+    claims: FactCheckClaim[];
+    errored: boolean;
+  }> = (async () => {
     try {
       const query = buildQuery(meta);
       const searchResult = await searchClaims(query, apiKey, {
@@ -178,19 +191,24 @@ export async function evaluateFactCheck(
     // route it to the tooltip-refresh hook (never the swap path).
     controller.abort();
     if (deps.onLateResult != null) {
-      fetchPromise.then((lateFetch) => {
-        if (lateFetch.claims.length > 0) {
-          const lateOutcome = applyCorroboration(lateFetch.claims, currentStamp);
-          deps.onLateResult!(videoId, lateOutcome);
-        }
-      }).catch(() => {}); // swallow late errors
+      fetchPromise
+        .then((lateFetch) => {
+          if (lateFetch.claims.length > 0) {
+            const lateOutcome = applyCorroboration(
+              lateFetch.claims,
+              currentStamp,
+            );
+            deps.onLateResult!(videoId, lateOutcome);
+          }
+        })
+        .catch(() => {}); // swallow late errors
     }
-    return { status: 'timeout' as const, result: null, strengthened: false };
+    return { status: "timeout" as const, result: null, strengthened: false };
   }
 
   // Fetch settled before timeout:
   if (winner.fetch.errored) {
-    return { status: 'error' as const, result: null, strengthened: false };
+    return { status: "error" as const, result: null, strengthened: false };
   }
 
   // Apply corroboration semantics to the fetched claims.
@@ -198,7 +216,7 @@ export async function evaluateFactCheck(
   if (claims.length === 0) {
     // Absence of results never downgrades — return the unchanged stamp.
     return {
-      status: 'no-results',
+      status: "no-results",
       result: noChange(currentStamp),
       strengthened: false,
     };
@@ -206,7 +224,7 @@ export async function evaluateFactCheck(
 
   const outcome = applyCorroboration(claims, currentStamp);
   return {
-    status: outcome.changed ? 'corroborated' : 'no-results',
+    status: outcome.changed ? "corroborated" : "no-results",
     result: outcome,
     strengthened: outcome.changed,
   };

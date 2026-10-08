@@ -47,9 +47,11 @@ describe("createProvider() selection order", () => {
 
   test("1) Chrome built-in wins even when Gemini + Ollama configured", () => {
     withWindow({ LanguageModel: {} });
-    const fakeGemini = vi.fn(
-      (): AIProvider => ({ name: "gemini", supportsStreaming: true, analyzeBatch: async function* () {} }),
-    );
+    const fakeGemini = vi.fn((): AIProvider => ({
+      name: "gemini",
+      supportsStreaming: true,
+      analyzeBatch: async function* () {},
+    }));
 
     const sel = createProvider({
       geminiApiKey: "AIza-fake",
@@ -65,13 +67,11 @@ describe("createProvider() selection order", () => {
 
   test("2) Gemini when key set and Chrome AI unavailable", () => {
     withWindow({});
-    const fakeGemini = vi.fn(
-      (key: string): AIProvider => ({
-        name: `gemini:${key.slice(0, 4)}`,
-        supportsStreaming: true,
-        analyzeBatch: async function* () {},
-      }),
-    );
+    const fakeGemini = vi.fn((key: string): AIProvider => ({
+      name: `gemini:${key.slice(0, 4)}`,
+      supportsStreaming: true,
+      analyzeBatch: async function* () {},
+    }));
 
     const sel = createProvider({
       geminiApiKey: "AIza-fake",
@@ -158,7 +158,8 @@ describe("createProvider() selection order", () => {
       timeoutMs: 5000,
     });
     // Reaching into the private field for verification only.
-    const internal = (sel.provider as unknown as { timeoutMs: number }).timeoutMs;
+    const internal = (sel.provider as unknown as { timeoutMs: number })
+      .timeoutMs;
     expect(internal).toBe(5000);
   });
 });

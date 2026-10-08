@@ -77,8 +77,8 @@ document.createElement = ((tag: string, opts?: ElementCreationOptions) => {
 // regardless of which global binding the module under test captured.
 const imgProto = Object.getPrototypeOf(globalThis.Image?.prototype ?? {});
 if (imgProto && !("decode" in imgProto)) {
-  (imgProto as unknown as { decode: () => Promise<void> }).decode =
-    () => Promise.resolve();
+  (imgProto as unknown as { decode: () => Promise<void> }).decode = () =>
+    Promise.resolve();
 }
 
 // Silence performance.mark if jsdom lacks User Timing entirely.

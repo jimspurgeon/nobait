@@ -3,8 +3,8 @@
  * detection, flushed once per animation frame.
  */
 
-import type { VideoCard } from './dom';
-import { SELECTORS, extractCard } from './dom';
+import type { VideoCard } from "./dom";
+import { SELECTORS, extractCard } from "./dom";
 
 export interface ObserverHost {
   onCards(cards: VideoCard[]): void;
@@ -35,7 +35,7 @@ export class SpatObserver {
     this.mo = new MutationObserver((muts) => {
       let relevant = false;
       for (const m of muts) {
-        if (m.type === 'childList' && m.addedNodes.length > 0) {
+        if (m.type === "childList" && m.addedNodes.length > 0) {
           for (const n of m.addedNodes) {
             if (n.nodeType === 1) {
               relevant = true;
@@ -47,7 +47,9 @@ export class SpatObserver {
       }
       if (!relevant) return;
       for (const root of muts) {
-        this.scanRoot(root.target instanceof Element ? root.target : document.body);
+        this.scanRoot(
+          root.target instanceof Element ? root.target : document.body,
+        );
       }
       schedule();
     });
@@ -72,7 +74,12 @@ export class SpatObserver {
 
   private scanRoot(root: Element): void {
     const els = root.matches?.(SELECTORS.GRID_ITEM)
-      ? [root, ...(root.querySelectorAll(SELECTORS.GRID_ITEM) as NodeListOf<Element>)]
+      ? [
+          root,
+          ...(root.querySelectorAll(
+            SELECTORS.GRID_ITEM,
+          ) as NodeListOf<Element>),
+        ]
       : (root.querySelectorAll(SELECTORS.GRID_ITEM) as NodeListOf<Element>);
     for (const el of els) {
       if (!(el instanceof Element)) continue;

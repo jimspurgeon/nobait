@@ -6,7 +6,11 @@
 
 import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import { StampTier } from "../../stamps/types.js";
-import { OllamaProvider, SUGGESTED_MODELS, probeEndpoint } from "../../ai/ollama.js";
+import {
+  OllamaProvider,
+  SUGGESTED_MODELS,
+  probeEndpoint,
+} from "../../ai/ollama.js";
 import type { VideoSignal } from "../../content/signals.js";
 import type { AnalysisResult } from "../../ai/types.js";
 
@@ -36,7 +40,9 @@ function validJsonFor(batch: VideoSignal[]): string {
   );
 }
 
-async function collect(gen: AsyncIterable<AnalysisResult>): Promise<AnalysisResult[]> {
+async function collect(
+  gen: AsyncIterable<AnalysisResult>,
+): Promise<AnalysisResult[]> {
   const out: AnalysisResult[] = [];
   for await (const item of gen) out.push(item);
   return out;
@@ -51,13 +57,21 @@ describe("OllamaProvider", () => {
   });
 
   test("constructor throws descriptively without a model", () => {
-    expect(() => new OllamaProvider({ model: "" })).toThrow(/\[nobait:ollama\]/);
-    expect(() => new OllamaProvider({ model: "   " })).toThrow(/model is required/);
+    expect(() => new OllamaProvider({ model: "" })).toThrow(
+      /\[nobait:ollama\]/,
+    );
+    expect(() => new OllamaProvider({ model: "   " })).toThrow(
+      /model is required/,
+    );
   });
 
   test("constructor rejects non-positive timeouts", () => {
-    expect(() => new OllamaProvider({ model: "m", timeoutMs: 0 })).toThrow(/positive/);
-    expect(() => new OllamaProvider({ model: "m", timeoutMs: -5 })).toThrow(/positive/);
+    expect(() => new OllamaProvider({ model: "m", timeoutMs: 0 })).toThrow(
+      /positive/,
+    );
+    expect(() => new OllamaProvider({ model: "m", timeoutMs: -5 })).toThrow(
+      /positive/,
+    );
   });
 
   test("empty batch yields nothing, makes no network call", async () => {
@@ -70,7 +84,9 @@ describe("OllamaProvider", () => {
 
   test("sends correct POST body: model, messages, low temperature", async () => {
     const batch = mkBatch(2);
-    const fetchFn = vi.fn().mockResolvedValue(chatResponse(validJsonFor(batch)));
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValue(chatResponse(validJsonFor(batch)));
     const p = new OllamaProvider({
       model: "qwen3:0.6b",
       baseUrl: "http://localhost:11434/",
@@ -102,7 +118,9 @@ describe("OllamaProvider", () => {
 
   test("parses a valid response and yields per-video results", async () => {
     const batch = mkBatch(3);
-    const fetchFn = vi.fn().mockResolvedValue(chatResponse(validJsonFor(batch)));
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValue(chatResponse(validJsonFor(batch)));
     const p = new OllamaProvider({ model: "m", fetchFn });
 
     const results = await collect(p.analyzeBatch(batch));
@@ -127,9 +145,7 @@ describe("OllamaProvider", () => {
   });
 
   test("empty model content → descriptive Error", async () => {
-    const fetchFn = vi.fn().mockResolvedValue(
-      chatResponse(""),
-    );
+    const fetchFn = vi.fn().mockResolvedValue(chatResponse(""));
     const p = new OllamaProvider({ model: "m", fetchFn });
     await expect(collect(p.analyzeBatch(mkBatch(1)))).rejects.toThrow(
       /\[nobait:ollama\] empty response/,
@@ -137,9 +153,14 @@ describe("OllamaProvider", () => {
   });
 
   test("HTTP error status → descriptive Error", async () => {
-    const fetchFn = vi.fn().mockResolvedValue(
-      new Response("<html>Bad Gateway</html>", { status: 502, statusText: "Bad Gateway" }),
-    );
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValue(
+        new Response("<html>Bad Gateway</html>", {
+          status: 502,
+          statusText: "Bad Gateway",
+        }),
+      );
     const p = new OllamaProvider({ model: "m", fetchFn });
     await expect(collect(p.analyzeBatch(mkBatch(1)))).rejects.toThrow(
       /HTTP 502/,
@@ -183,7 +204,9 @@ describe("OllamaProvider", () => {
   test("does not mutate the input batch", async () => {
     const batch = mkBatch(2);
     const snapshot = JSON.parse(JSON.stringify(batch));
-    const fetchFn = vi.fn().mockResolvedValue(chatResponse(validJsonFor(batch)));
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValue(chatResponse(validJsonFor(batch)));
     const p = new OllamaProvider({ model: "m", fetchFn });
 
     await collect(p.analyzeBatch(batch));
@@ -202,7 +225,9 @@ describe("OllamaProvider", () => {
       // Parse the batch payload out of the user message to answer correctly.
       const userMsg = body.messages[1]!.content;
       const jsonStart = userMsg.indexOf("[");
-      const payload = JSON.parse(userMsg.slice(jsonStart)) as Array<{ id: string }>;
+      const payload = JSON.parse(userMsg.slice(jsonStart)) as Array<{
+        id: string;
+      }>;
       return chatResponse(
         JSON.stringify(
           payload.map((v) => ({
@@ -246,7 +271,9 @@ describe("OllamaProvider", () => {
 
 describe("probeEndpoint()", () => {
   test("resolves true on reachable endpoint", async () => {
-    const fetchFn = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValue(new Response("{}", { status: 200 }));
     expect(await probeEndpoint("http://localhost:11434", fetchFn)).toBe(true);
     expect(fetchFn).toHaveBeenCalledWith(
       "http://localhost:11434/v1/models",

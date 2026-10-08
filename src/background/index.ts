@@ -1,9 +1,9 @@
-import { scheduler } from './scheduler';
-import { cacheDB } from '../storage/cache';
-import { aiProviderFactory } from '../ai/factory';
-import { GeminiProvider } from '../ai/gemini';
-import { AIInput, StampResult } from '../stamps/types';
-import { evaluateFactCheck, StampTier as FactCheckTier } from './factcheck';
+import { scheduler } from "./scheduler";
+import { cacheDB } from "../storage/cache";
+import { aiProviderFactory } from "../ai/factory";
+import { GeminiProvider } from "../ai/gemini";
+import { AIInput, StampResult } from "../stamps/types";
+import { evaluateFactCheck, StampTier as FactCheckTier } from "./factcheck";
 
 declare const browser: any;
 declare const chrome: any;
@@ -18,7 +18,7 @@ class BackgroundWorker {
   async init(): Promise<void> {
     if (this.initialized) return;
 
-    console.log('[nobait] Initializing background worker...');
+    console.log("[nobait] Initializing background worker...");
 
     // Initialize cache database
     await cacheDB.init();
@@ -33,7 +33,7 @@ class BackgroundWorker {
     setInterval(() => cacheDB.cleanup().catch(console.error), 60 * 60 * 1000);
 
     this.initialized = true;
-    console.log('[nobait] Background worker initialized');
+    console.log("[nobait] Background worker initialized");
   }
 
   /**
@@ -43,41 +43,49 @@ class BackgroundWorker {
     const handleMessage = (
       message: { type?: string; [key: string]: any },
       _sender: unknown,
-      sendResponse: (response: any) => void
+      sendResponse: (response: any) => void,
     ): boolean => {
       switch (message.type) {
-        case 'EVALUATE_VIDEO': {
+        case "EVALUATE_VIDEO": {
           this.handleEvaluateVideo({
             videoId: message.videoId,
             title: message.title,
             description: message.description,
             transcript: message.transcript,
-            chapters: message.chapters
+            chapters: message.chapters,
           })
             .then(sendResponse)
-            .catch(err => sendResponse({ success: false, error: String(err) }));
+            .catch((err) =>
+              sendResponse({ success: false, error: String(err) }),
+            );
           return true; // Async response
         }
 
-        case 'GET_CACHE_STATUS':
+        case "GET_CACHE_STATUS":
           this.getCacheStatus()
             .then(sendResponse)
-            .catch(err => sendResponse({ success: false, error: String(err) }));
+            .catch((err) =>
+              sendResponse({ success: false, error: String(err) }),
+            );
           return true;
 
-        case 'CLEAR_CACHE':
+        case "CLEAR_CACHE":
           this.clearCache()
             .then(sendResponse)
-            .catch(err => sendResponse({ success: false, error: String(err) }));
+            .catch((err) =>
+              sendResponse({ success: false, error: String(err) }),
+            );
           return true;
 
-        case 'SET_GEMINI_API_KEY':
+        case "SET_GEMINI_API_KEY":
           this.setGeminiApiKey(message.key)
             .then(() => sendResponse({ success: true }))
-            .catch(err => sendResponse({ success: false, error: String(err) }));
+            .catch((err) =>
+              sendResponse({ success: false, error: String(err) }),
+            );
           return true;
 
-        case 'nobait:clear-thumb-cache': {
+        case "nobait:clear-thumb-cache": {
           void this.clearThumbCaches().then(() => {
             // P2 style reply (service-worker postMessage)
           });
@@ -86,24 +94,24 @@ class BackgroundWorker {
         }
 
         default:
-          console.warn('[nobait] Unknown message type:', message.type);
-          sendResponse({ success: false, error: 'Unknown message type' });
+          console.warn("[nobait] Unknown message type:", message.type);
+          sendResponse({ success: false, error: "Unknown message type" });
           return false;
       }
     };
 
     // Firefox WebExtensions API
     const runtimeApi =
-      typeof browser !== 'undefined' && browser?.runtime?.onMessage
+      typeof browser !== "undefined" && browser?.runtime?.onMessage
         ? browser.runtime
-        : typeof chrome !== 'undefined' && chrome?.runtime?.onMessage
+        : typeof chrome !== "undefined" && chrome?.runtime?.onMessage
           ? chrome.runtime
           : null;
 
     if (runtimeApi) {
       runtimeApi.onMessage.addListener(handleMessage);
     } else {
-      console.error('[nobait] No runtime message API available');
+      console.error("[nobait] No runtime message API available");
     }
 
     // Subscribe to incremental results for streaming DOM patching
@@ -127,15 +135,15 @@ class BackgroundWorker {
       title: payload.title,
       description: payload.description,
       transcript: payload.transcript,
-      chapters: payload.chapters
+      chapters: payload.chapters,
     };
 
     // Fact-check layer (P6): runs in parallel with AI inference and can
     // only strengthen a FAKE-leaning stamp, never delay or soften it.
     const factCheckPromise = evaluateFactCheck(
       input.videoId,
-      { title: input.title, description: input.description ?? '' },
-      FactCheckTier.UNSURE
+      { title: input.title, description: input.description ?? "" },
+      FactCheckTier.UNSURE,
     );
 
     const result = await scheduler.evaluate(input);
@@ -150,7 +158,11 @@ class BackgroundWorker {
   /**
    * Get cache statistics
    */
-  private async getCacheStatus(): Promise<{ success: boolean; analysisCount: number; negativeCount: number }> {
+  private async getCacheStatus(): Promise<{
+    success: boolean;
+    analysisCount: number;
+    negativeCount: number;
+  }> {
     return { success: true, analysisCount: 0, negativeCount: 0 };
   }
 
@@ -178,15 +190,15 @@ class BackgroundWorker {
    */
   private async broadcastResult(result: StampResult): Promise<void> {
     const tabsApi =
-      typeof browser !== 'undefined' && browser?.tabs
+      typeof browser !== "undefined" && browser?.tabs
         ? browser.tabs
-        : typeof chrome !== 'undefined' && chrome?.tabs
+        : typeof chrome !== "undefined" && chrome?.tabs
           ? chrome.tabs
           : null;
 
     if (!tabsApi) return;
 
-    const message = { type: 'NEW_RESULT', result };
+    const message = { type: "NEW_RESULT", result };
 
     try {
       const tabs = await tabsApi.query({});
@@ -208,7 +220,7 @@ class BackgroundWorker {
    * Clear thumbnail-related IndexedDB databases (P2 pipeline coordination)
    */
   private async clearThumbCaches(): Promise<void> {
-    for (const name of ['nobait-thumbnails', 'nobait-sprites']) {
+    for (const name of ["nobait-thumbnails", "nobait-sprites"]) {
       await new Promise<void>((resolve) => {
         const req = indexedDB.deleteDatabase(name);
         req.onsuccess = req.onerror = req.onblocked = () => resolve();
@@ -219,8 +231,8 @@ class BackgroundWorker {
 
 // Initialize on service worker startup
 const worker = new BackgroundWorker();
-void worker.init().catch(err => {
-  console.error('[nobait] Failed to initialize background worker:', err);
+void worker.init().catch((err) => {
+  console.error("[nobait] Failed to initialize background worker:", err);
 });
 
 export default worker;

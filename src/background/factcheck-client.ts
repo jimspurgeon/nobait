@@ -30,7 +30,7 @@
  */
 
 export const CLAIMS_SEARCH_ENDPOINT =
-  'https://factchecktools.googleapis.com/v1alpha1/claims:search';
+  "https://factchecktools.googleapis.com/v1alpha1/claims:search";
 
 /**
  * Normalized ClaimReview entry — one review of one claim.
@@ -69,22 +69,25 @@ export interface ClaimsSearchResult {
 /**
  * Coarse rating classification used for corroboration semantics.
  */
-export type RatingCategory = 'false' | 'mixed' | 'true' | 'unclassified';
+export type RatingCategory = "false" | "mixed" | "true" | "unclassified";
 
 /** Rating regex clusters, ordered: first match wins. */
-const RATING_CLUSTERS: ReadonlyArray<{ category: RatingCategory; pattern: RegExp }> = [
+const RATING_CLUSTERS: ReadonlyArray<{
+  category: RatingCategory;
+  pattern: RegExp;
+}> = [
   {
-    category: 'false',
+    category: "false",
     pattern:
       /\b(false|pants ?on ?fire|debunk(?:ed)?|hoax|fabricat(?:ed|ion)|misinformation|disinformation|pseudoscience|baseless|untrue)\b/i,
   },
   {
-    category: 'mixed',
+    category: "mixed",
     pattern:
       /\b(mixed|mixture|half[- ]true|partly (?:true|false)|partially (?:true|false)|mostly false|needs context|missing context|misleading|cherry[- ]picked|unproven|unsubstantiated)\b/i,
   },
   {
-    category: 'true',
+    category: "true",
     pattern:
       /\b(true|accurate|correct|verified|supported|mostly true|largely true|fact[- ]check:? true)\b/i,
   },
@@ -96,11 +99,11 @@ const RATING_CLUSTERS: ReadonlyArray<{ category: RatingCategory; pattern: RegExp
  */
 export function classifyRating(textualRating: string): RatingCategory {
   const norm = textualRating.trim();
-  if (norm === '') return 'unclassified';
+  if (norm === "") return "unclassified";
   for (const { category, pattern } of RATING_CLUSTERS) {
     if (pattern.test(norm)) return category;
   }
-  return 'unclassified';
+  return "unclassified";
 }
 
 /** Deterministic fallback id derived from text content. */
@@ -115,44 +118,51 @@ function fallbackId(text: string): string {
 
 /** Safely coerce an unknown value to a trimmed string. */
 function asString(v: unknown): string | undefined {
-  return typeof v === 'string' && v.trim() !== '' ? v : undefined;
+  return typeof v === "string" && v.trim() !== "" ? v : undefined;
 }
 
 /**
  * Defensively extract FactCheckClaim entries from a raw Claim object.
  * Malformed shapes yield fewer (or zero) entries, never a throw.
  */
-function extractReviewsFromClaim(rawClaim: unknown, out: FactCheckClaim[]): void {
-  if (rawClaim == null || typeof rawClaim !== 'object') return;
+function extractReviewsFromClaim(
+  rawClaim: unknown,
+  out: FactCheckClaim[],
+): void {
+  if (rawClaim == null || typeof rawClaim !== "object") return;
   const claim = rawClaim as Record<string, unknown>;
 
-  const claimText = asString(claim['text']) ?? asString(claim['claimText']) ?? '(no claim text)';
+  const claimText =
+    asString(claim["text"]) ??
+    asString(claim["claimText"]) ??
+    "(no claim text)";
 
-  const reviewsRaw = claim['claimReview'];
+  const reviewsRaw = claim["claimReview"];
   const reviewList = Array.isArray(reviewsRaw) ? reviewsRaw : [reviewsRaw];
 
   for (const reviewRaw of reviewList) {
-    if (reviewRaw == null || typeof reviewRaw !== 'object') continue;
+    if (reviewRaw == null || typeof reviewRaw !== "object") continue;
     const review = reviewRaw as Record<string, unknown>;
 
-    let publisher = '(unknown publisher)';
+    let publisher = "(unknown publisher)";
     let publisherSite: string | undefined;
-    const pubRaw = review['publisher'];
-    if (pubRaw != null && typeof pubRaw === 'object') {
+    const pubRaw = review["publisher"];
+    if (pubRaw != null && typeof pubRaw === "object") {
       const pub = pubRaw as Record<string, unknown>;
-      publisher = asString(pub['name']) ?? publisher;
-      publisherSite = asString(pub['site']);
+      publisher = asString(pub["name"]) ?? publisher;
+      publisherSite = asString(pub["site"]);
     }
 
-    const reviewUrl = asString(review['url']) ?? '';
-    const textualRating = asString(review['textualRating']) ?? '(no rating)';
-    const reviewDate = asString(review['reviewDate']);
+    const reviewUrl = asString(review["url"]) ?? "";
+    const textualRating = asString(review["textualRating"]) ?? "(no rating)";
+    const reviewDate = asString(review["reviewDate"]);
 
-    if (reviewUrl === '' && textualRating === '(no rating)') continue; // useless entry
+    if (reviewUrl === "" && textualRating === "(no rating)") continue; // useless entry
 
     out.push({
       id: fallbackId(`${claimText}|${reviewUrl}`),
-      claimText: claimText.length > 200 ? `${claimText.slice(0, 197)}...` : claimText,
+      claimText:
+        claimText.length > 200 ? `${claimText.slice(0, 197)}...` : claimText,
       publisher,
       publisherSite,
       reviewUrl,
@@ -169,9 +179,9 @@ function extractReviewsFromClaim(rawClaim: unknown, out: FactCheckClaim[]): void
  */
 export function parseClaimsSearchBody(body: unknown): ClaimsSearchResult {
   const result: ClaimsSearchResult = { claims: [] };
-  if (body == null || typeof body !== 'object') return result;
+  if (body == null || typeof body !== "object") return result;
 
-  const claimsRaw = (body as Record<string, unknown>)['claims'];
+  const claimsRaw = (body as Record<string, unknown>)["claims"];
   if (!Array.isArray(claimsRaw)) return result;
 
   for (const rawClaim of claimsRaw) {
@@ -194,17 +204,22 @@ export function parseClaimsSearchBody(body: unknown): ClaimsSearchResult {
 export async function searchClaims(
   query: string,
   apiKey: string,
-  opts: { fetchImpl?: typeof fetch; signal?: AbortSignal; languageCode?: string } = {},
+  opts: {
+    fetchImpl?: typeof fetch;
+    signal?: AbortSignal;
+    languageCode?: string;
+  } = {},
 ): Promise<ClaimsSearchResult> {
   const doFetch = opts.fetchImpl ?? fetch;
 
   const url = new URL(CLAIMS_SEARCH_ENDPOINT);
-  url.searchParams.set('query', query);
-  url.searchParams.set('key', apiKey);
-  if (opts.languageCode) url.searchParams.set('languageCode', opts.languageCode);
+  url.searchParams.set("query", query);
+  url.searchParams.set("key", apiKey);
+  if (opts.languageCode)
+    url.searchParams.set("languageCode", opts.languageCode);
 
   const response = await doFetch(url.toString(), {
-    method: 'GET',
+    method: "GET",
     signal: opts.signal,
   });
 
