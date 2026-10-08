@@ -1,0 +1,13 @@
+/* nobait — content-level styles */
+
+/*
+ * While a thumbnail crossfade runs, the snapshot canvas overlay is
+ * absolutely positioned over the image. Ensure thumbnail anchors can host
+ * it without shifting layout ( Thumbnails are position:relative on YT's
+ * side already, but guarantee it for edge placements like shorts.
+ */
+ytd-thumbnail a#thumbnail,
+ytd-thumbnail .yt-simple-endpoint {
+  position: relative;
+  isolation: isolate;
+}

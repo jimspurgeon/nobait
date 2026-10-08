@@ -1,0 +1,30 @@
+{
+  "name": "nobait",
+  "version": "0.2.0",
+  "description": "Replace clickbait YouTube titles and thumbnails with factual alternatives and credibility stamps.",
+  "license": "AGPL-3.0",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc --noEmit && vite build",
+    "build:firefox": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "lint": "eslint src",
+    "dev:firefox": "vite"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "@types/node": "^22.10.0",
+    "@types/firefox-webext-browser": "^120.0.4",
+    "jsdom": "^25.0.1",
+    "playwright": "^1.49.0",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0",
+    "vitest": "^2.1.0"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "nobait",
+  "version": "0.2.0",
+  "description": "Replaces clickbait YouTube titles and thumbnails with factual alternatives and credibility stamps.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "nobait@nobait.example",
+      "strict_min_version": "115.0"
+    }
+  },
+  "icons": {
+    "48": "icons/48.png",
+    "96": "icons/96.png"
+  },
+  "permissions": ["storage"],
+  "host_permissions": [
+    "*://*.youtube.com/*",
+    "*://*.ytimg.com/*"
+  ],
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.youtube.com/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ]
+}
