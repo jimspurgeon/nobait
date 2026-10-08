@@ -2,8 +2,7 @@
  * Options page logic
  */
 
-declare const browser: any;
-declare const chrome: any;
+// `browser` / `chrome` globals come from webextension-polyfill / @types/chrome.
 
 const api = typeof browser !== 'undefined' ? browser : typeof chrome !== 'undefined' ? chrome : null;
 

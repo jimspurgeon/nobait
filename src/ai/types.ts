@@ -1,12 +1,27 @@
 /**
- * Result of analyzing ONE video. These are yielded by
- * {@link AIProvider.analyzeBatch} as soon as each video's verdict is parsed —
- * per-video streaming is the core responsiveness trick (PLAN.md §3 Stage 3).
+ * AI provider contracts (AGENTS.md "AI provider implementation guide").
+ *
+ * The canonical batch interface (`AIProvider`, P4): providers yield
+ * `AnalysisResult`s incrementally via an async iterable, so callers need
+ * no branching for streaming vs non-streaming backends. `supportsStreaming`
+ * is informational — `false` just means results may all arrive in one chunk.
+ *
+ * Implementations MUST:
+ *   - never mutate the input batch or its nested objects;
+ *   - yield one result per input video, in input order preferred but not
+ *     required;
+ *   - fall back to `UNSURE` + original-title passthrough on ANY parse
+ *     ambiguity rather than throwing mid-stream;
+ *   - reject with descriptive `Error` objects on infrastructure failure
+ *     (network down, timeout exceeded, model unavailable);
+ *   - respect the hard timeout injected via constructor config.
  */
 import type { StampTier } from "../stamps/types.js";
 import type { VideoSignal } from "../content/signals.js";
 
 export type { StampTier, VideoSignal };
+
+/** Result of analyzing ONE video. */
 export interface AnalysisResult {
   /** The video this verdict belongs to (echoed from the batch input). */
   videoId: string;
@@ -29,20 +44,7 @@ export interface AnalysisResult {
 /** A batch of videos to analyze in one provider round trip. */
 export type BatchInput = readonly VideoSignal[];
 
-/**
- * Pluggable AI provider contract (AGENTS.md "AI provider implementation
- * guide"). Implementations MUST:
- *
- * - never mutate the input batch or its nested objects;
- * - yield results incrementally as each video's output parses (streaming);
- * - yield one result per input video, in input order preferred but not
- *   required;
- * - fall back to `UNSURE` + original-title passthrough on ANY parse
- *   ambiguity rather than throwing mid-stream;
- * - reject with descriptive `Error` objects on infrastructure failure
- *   (network down, timeout exceeded, model unavailable);
- * - respect the hard timeout injected via constructor config.
- */
+/** Pluggable AI provider contract. */
 export interface AIProvider {
   readonly name: string;
   /**
@@ -61,4 +63,16 @@ export interface AIProvider {
 
   /** Optional cleanup on shutdown (close sessions, abort in-flight work). */
   close?(): void;
+}
+
+/**
+ * Shapes carried over from the P3 Gemini implementation for stream
+ * parsing (kept as a plain data contract, no behavioral coupling).
+ */
+export interface BatchVideoResult {
+  videoId: string;
+  rewrittenTitle: string;
+  /** Raw string tier — MUST be validated via parseStampTier/isStampTier. */
+  stamp: string;
+  stampExplanation: string;
 }

@@ -14,7 +14,7 @@
  * gracefully.
  */
 
-import { NanoProvider, type LanguageModel } from "./nano.js";
+import { NanoProvider } from "./nano.js";
 import { OllamaProvider } from "./ollama.js";
 import type { AIProvider } from "./types.js";
 
@@ -119,3 +119,95 @@ export function createProvider(config: AIProviderConfig): ProviderSelection {
     reason: "no provider available",
   };
 }
+
+
+// ---------------------------------------------------------------------------
+// P3-compatible singleton facade (background/scheduler + options wiring)
+// ---------------------------------------------------------------------------
+
+import { GeminiProvider } from "./gemini.js";
+
+/**
+ * Legacy-compatible factory singleton. Wraps {@link createProvider} with the
+ * P3 `initialize()` semantics so the background scheduler can keep its
+ * provider lifecycle unchanged. Lazily constructs the underlying provider
+ * using stored config; re-initializes when the preferred provider changes.
+ */
+export class AIProviderFactory {
+  private static instance: AIProviderFactory;
+  private provider: AIProvider | null = null;
+  private currentProviderName: string | null = null;
+
+  private constructor() {}
+
+  static getInstance(): AIProviderFactory {
+    if (!AIProviderFactory.instance) {
+      AIProviderFactory.instance = new AIProviderFactory();
+    }
+    return AIProviderFactory.instance;
+  }
+
+  /**
+   * Initialize (or reuse) a provider based on configuration.
+   */
+  async initialize(config: {
+    preferredProvider?: "gemini" | "ollama" | "chrome";
+    geminiApiKey?: string;
+    ollamaUrl?: string;
+    useChromeAI?: boolean;
+  }): Promise<AIProvider> {
+    const sameName =
+      this.provider !== null &&
+      this.currentProviderName === (config.preferredProvider ?? "gemini");
+    if (this.provider && sameName) {
+      return this.provider;
+    }
+
+    if (this.provider?.close) {
+      this.provider.close();
+    }
+
+    const selection = createProvider({
+      geminiApiKey: config.geminiApiKey,
+      ollamaBaseUrl: config.ollamaUrl,
+      createGeminiProvider: (apiKey) => new GeminiProvider(apiKey),
+    });
+
+    if (selection.provider === null) {
+      // Fall back to the Gemini provider (loads its key from storage).
+      const gemini = new GeminiProvider(config.geminiApiKey);
+      if (!config.geminiApiKey) {
+        await gemini.loadApiKey();
+      }
+      this.provider = gemini;
+      this.currentProviderName = "gemini";
+    } else {
+      this.provider = selection.provider;
+      this.currentProviderName = selection.reason;
+    }
+
+    return this.provider;
+  }
+
+  /** Get the current provider, if any. */
+  getProvider(): AIProvider | null {
+    return this.provider;
+  }
+
+  /** Current provider name (for logging / options UI). */
+  getCurrentProviderName(): string | null {
+    return this.currentProviderName;
+  }
+
+  /** Reset — next initialize() rebuilds from scratch. */
+  reset(): void {
+    if (this.provider?.close) {
+      this.provider.close();
+    }
+    this.provider = null;
+    this.currentProviderName = null;
+  }
+}
+
+/** Singleton used by the background scheduler. */
+export const aiProviderFactory = AIProviderFactory.getInstance();

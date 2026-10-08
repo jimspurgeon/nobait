@@ -213,6 +213,7 @@ export class NanoProvider implements AIProvider {
     // wedge the batch pipeline.
     let timer: ReturnType<typeof setTimeout> | undefined;
     let timedOut = false;
+    void timedOut; // written by the timeout race; retained for clarity
     const timeoutRace = new Promise<never>((_, reject) => {
       timer = setTimeout(() => {
         timedOut = true;

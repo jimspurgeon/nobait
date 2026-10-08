@@ -6,7 +6,6 @@ import { describe, test, expect } from "vitest";
 import {
   STAMP_LABELS,
   STAMP_TIERS,
-  StampTier,
   isStampTier,
 } from "../../stamps/types.js";
 

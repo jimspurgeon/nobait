@@ -1,6 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { GeminiProvider, MODEL_VERSION, IncrementalResultParser } from '../../ai/gemini';
+import { GeminiProvider, IncrementalResultParser } from '../../ai/gemini';
 import { StampTier } from '../../stamps/types';
+
+/** Collect all results yielded by an async-iterable provider call. */
+async function collect(iter: AsyncIterable<{
+  videoId: string;
+  rewrittenTitle: string;
+  stamp: StampTier;
+  stampExplanation: string;
+}>): Promise<Array<{ videoId: string; rewrittenTitle: string; stamp: StampTier; stampExplanation: string }>> {
+  const out: Array<{ videoId: string; rewrittenTitle: string; stamp: StampTier; stampExplanation: string }> = [];
+  for await (const r of iter) out.push(r);
+  return out;
+}
 
 describe('GeminiProvider', () => {
   let provider: GeminiProvider;
@@ -29,18 +41,18 @@ describe('GeminiProvider', () => {
         { videoId: 'vid-2', title: 'CLICKBAIT 3' }
       ];
 
-      const result = await provider.analyzeBatch({ videos, modelVersion: MODEL_VERSION });
+      const result = await collect(provider.analyzeBatch(videos));
 
       // Exactly one request
       expect(fetchSpy).toHaveBeenCalledTimes(1);
 
       // Request body contains structured schema
-      const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
+      const body = JSON.parse((fetchSpy.mock.calls[0]?.[1] as RequestInit).body as string);
       expect(body.contents[0].parts[0].text).toContain('vid-0');
       expect(body.generationConfig.responseMimeType).toBe('application/json');
       expect(body.generationConfig.responseSchema.properties.results.items.properties.stamp.enum).toHaveLength(6);
 
-      expect(result.results).toHaveLength(3);
+      expect(result).toHaveLength(3);
     });
 
     it('includes each video\'s signals in prompt', async () => {
@@ -63,9 +75,9 @@ describe('GeminiProvider', () => {
         chapters: [{ startMs: 0, title: 'Intro' }]
       }];
 
-      await provider.analyzeBatch({ videos, modelVersion: MODEL_VERSION });
+      await collect(provider.analyzeBatch(videos));
 
-      const promptText = (JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string)
+      const promptText = (JSON.parse((fetchSpy.mock.calls[0]?.[1] as RequestInit).body as string)
         .contents[0].parts[0].text as string);
       expect(promptText).toContain('Test description');
       expect(promptText).toContain('Sample transcript text');
@@ -89,14 +101,11 @@ describe('GeminiProvider', () => {
         new Response(stream, { status: 200 })
       );
 
-      const result = await provider.analyzeBatch({
-        videos: [{ videoId: 'abc', title: 'Bad Title' }],
-        modelVersion: MODEL_VERSION
-      });
+      const result = await collect(provider.analyzeBatch([{ videoId: 'abc', title: 'Bad Title' }]));
 
-      expect(result.results[0].videoId).toBe('abc');
-      expect(result.results[0].rewrittenTitle).toBe('Good Title');
-      expect(result.results[0].stamp).toBe(StampTier.LEGITIMATE);
+      expect(result[0]?.videoId).toBe('abc');
+      expect(result[0]?.rewrittenTitle).toBe('Good Title');
+      expect(result[0]?.stamp).toBe(StampTier.LEGITIMATE);
     });
 
     it('falls back to UNSURE for malformed stamp in stream', async () => {
@@ -112,14 +121,11 @@ describe('GeminiProvider', () => {
         new Response(stream, { status: 200 })
       );
 
-      const result = await provider.analyzeBatch({
-        videos: [{ videoId: 'xyz', title: 'Clickbait' }],
-        modelVersion: MODEL_VERSION
-      });
+      const result = await collect(provider.analyzeBatch([{ videoId: 'xyz', title: 'Clickbait' }]));
 
-      expect(result.results[0].stamp).toBe(StampTier.UNSURE);
+      expect(result[0]?.stamp).toBe(StampTier.UNSURE);
       // Model provided its own explanation, which is preserved
-      expect(result.results[0].stampExplanation).toBe('Hmm');
+      expect(result[0]?.stampExplanation).toBe('Hmm');
     });
   });
 
@@ -182,23 +188,20 @@ describe('IncrementalResultParser (chunk-by-chunk streaming)', () => {
 
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(stream, { status: 200 }));
 
-    const partialResults: string[] = [];
-    const result = await provider2.analyzeBatch(
-      { videos: [
-        { videoId: 's-1', title: 'A' },
-        { videoId: 's-2', title: 'B' },
-        { videoId: 's-3', title: 'C' }
-      ], modelVersion: MODEL_VERSION },
-      (partial) => {
-        partialResults.push(partial.videoId);
-        emissionOrder.push(partial.videoId);
-      }
-    );
+    const result: Array<{ videoId: string; rewrittenTitle: string; stamp: StampTier; stampExplanation: string }> = [];
+    for await (const r of provider2.analyzeBatch([
+      { videoId: 's-1', title: 'A' },
+      { videoId: 's-2', title: 'B' },
+      { videoId: 's-3', title: 'C' }
+    ])) {
+      result.push(r);
+      emissionOrder.push(r.videoId);
+    }
 
     // All three emitted incrementally, in stream order
-    expect(partialResults).toEqual(['s-1', 's-2', 's-3']);
-    expect(result.results).toHaveLength(3);
-    expect(result.results.map(r => r.videoId)).toEqual(['s-1', 's-2', 's-3']);
+    expect(emissionOrder).toEqual(['s-1', 's-2', 's-3']);
+    expect(result).toHaveLength(3);
+    expect(result.map(r => r.videoId)).toEqual(['s-1', 's-2', 's-3']);
   });
 
   it('does not emit anything until a full object is available', () => {

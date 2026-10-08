@@ -1,5 +1,8 @@
 import { extractVideoId } from "../utils/url";
 
+// Re-exported for content-script callers that import from ./dom (P3 shape).
+export { extractVideoId };
+
 /**
  * YouTube-specific DOM selectors - centralized here so YouTube changes
  * only require fixing one file
@@ -35,15 +38,6 @@ export interface VideoHit {
   videoId: string;
   /** Where the hit was found, for debugging and later prioritization. */
   source: "link" | "url";
-}
-
-/**
- * Extract videoId from a YouTube URL (moved from utils/url to avoid circular dep)
- */
-export function extractVideoIdFromUrl(url: string): string | null {
-  if (!url) return null;
-  const match = url.match(/(?:v=|\/shorts\/|\/embed\/|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-  return match ? match[1] : null;
 }
 
 /**

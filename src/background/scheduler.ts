@@ -1,6 +1,7 @@
-import { AIInput, StampResult, StampTier } from '../stamps/types';
+import { AIInput, StampResult } from '../stamps/types';
 import { aiProviderFactory } from '../ai/factory';
 import { MODEL_VERSION } from '../ai/gemini';
+import { parseStampTier } from '../ai/classify';
 import { cacheDB } from '../storage/cache';
 
 interface PendingRequest {
@@ -119,38 +120,41 @@ export class EvaluationScheduler {
 
     if (inputs.length === 0) return;
 
+    // Videos already delivered in this flush (streaming may repeat them).
+    const handledVideoIds = new Set<string>();
+
     try {
       const provider = await aiProviderFactory.initialize({});
-      if (!provider.analyzeBatch) {
-        throw new Error('[nobait] Provider does not support batching');
-      }
 
-      // Chunk into groups of 20
+      // Chunk into groups of 20. The canonical AIProvider interface (P4)
+      // yields AnalysisResults incrementally via an async iterable; each
+      // video's result is emitted + cached the moment it arrives.
       for (let i = 0; i < inputs.length; i += this.MAX_BATCH_SIZE) {
         const chunk = inputs.slice(i, i + this.MAX_BATCH_SIZE);
-        const response = await provider.analyzeBatch(
-          { videos: chunk, modelVersion: MODEL_VERSION },
-          (partial) => {
-            // Streaming: emit each video's result the moment its chunk is
-            // complete, so the DOM is patched immediately
-            const stampResult: StampResult = {
-              videoId: partial.videoId,
-              rewrittenTitle: partial.rewrittenTitle,
-              stamp: partial.stamp as StampTier,
-              stampExplanation: partial.stampExplanation,
-              timestamp: Date.now(),
-              modelVersion: MODEL_VERSION
-            };
-            this.emitResult(stampResult);
-          }
+        const chunkQueue = queued.filter((req) =>
+          chunk.some((c) => c.videoId === req.input.videoId)
         );
 
-        // Map results back to videoIds
-        const resultMap = new Map(response.results.map(r => [r.videoId, r]));
+        const resultMap = new Map<string, { videoId: string; rewrittenTitle: string; stamp: string; stampExplanation: string }>();
 
-        for (const req of queued) {
-          const result = resultMap.get(req.input.videoId);
-          if (!result) {
+        for await (const result of provider.analyzeBatch(chunk)) {
+          const partial: { videoId: string; rewrittenTitle: string; stamp: string; stampExplanation: string } = {
+            videoId: result.videoId,
+            rewrittenTitle: result.rewrittenTitle,
+            stamp: result.stamp,
+            stampExplanation: result.stampExplanation
+          };
+          resultMap.set(partial.videoId, partial);
+
+          const req = chunkQueue.find((r) => r.input.videoId === partial.videoId);
+          if (req && !handledVideoIds.has(partial.videoId)) {
+            handledVideoIds.add(partial.videoId);
+            await this.deliverResult(req, partial);
+          }
+        }
+
+        for (const req of chunkQueue) {
+          if (!resultMap.has(req.input.videoId)) {
             // AI didn't return a result for this video
             await cacheDB.setNegative({
               videoId: req.input.videoId,
@@ -159,31 +163,7 @@ export class EvaluationScheduler {
               ttlMs: 24 * 60 * 60 * 1000
             });
             req.resolve(null);
-            continue;
           }
-
-          const stampResult: StampResult = {
-            videoId: result.videoId,
-            rewrittenTitle: result.rewrittenTitle,
-            stamp: result.stamp as StampTier,
-            stampExplanation: result.stampExplanation,
-            timestamp: Date.now(),
-            modelVersion: MODEL_VERSION
-          };
-
-          // Cache the result
-          await cacheDB.setAnalysis({
-            videoId: result.videoId,
-            result: stampResult,
-            inputHash: this.computeInputHash(req.input),
-            modelVersion: MODEL_VERSION,
-            createdAt: Date.now(),
-            expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 // 7 days TTL
-          });
-
-          // Notify listeners (streaming-like incremental delivery)
-          this.emitResult(stampResult);
-          req.resolve(stampResult);
         }
       }
     } catch (err) {
@@ -200,6 +180,38 @@ export class EvaluationScheduler {
   /**
    * Compute hash of input for cache invalidation
    */
+  /**
+   * Convert a provider AnalysisResult into a StampResult, cache it, notify
+   * listeners, and resolve the originating request.
+   */
+  private async deliverResult(
+    req: PendingRequest,
+    partial: { videoId: string; rewrittenTitle: string; stamp: string; stampExplanation: string }
+  ): Promise<void> {
+    const stampResult: StampResult = {
+      videoId: partial.videoId,
+      rewrittenTitle: partial.rewrittenTitle,
+      stamp: parseStampTier(partial.stamp).tier,
+      stampExplanation: partial.stampExplanation,
+      timestamp: Date.now(),
+      modelVersion: MODEL_VERSION
+    };
+
+    // Cache the result
+    await cacheDB.setAnalysis({
+      videoId: stampResult.videoId,
+      result: stampResult,
+      inputHash: this.computeInputHash(req.input),
+      modelVersion: MODEL_VERSION,
+      createdAt: Date.now(),
+      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 // 7 days TTL
+    });
+
+    // Notify listeners (streaming-like incremental delivery)
+    this.emitResult(stampResult);
+    req.resolve(stampResult);
+  }
+
   private computeInputHash(input: AIInput): string {
     const str = `${input.title}|${input.description || ''}|${input.transcript || ''}|${JSON.stringify(input.chapters)}`;
     let hash = 0;

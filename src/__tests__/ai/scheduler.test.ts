@@ -12,17 +12,32 @@ vi.mock('../../ai/factory', () => ({
     initialize: vi.fn().mockImplementation(async () => ({
       name: 'gemini-mock',
       supportsStreaming: true,
-      analyzeBatch: vi.fn().mockImplementation(async ({ videos }: any) => {
+      // Canonical (P4) AIProvider interface: async generator yielding
+      // AnalysisResults per video.
+      analyzeBatch: vi.fn().mockImplementation(async function* (videos: any[]) {
         mockState.analyzeBatchCalls.push(videos);
-        if (mockState.resolveFn) return mockState.resolveFn(videos);
-        return {
-          results: videos.map((v: any) => ({
+        let results;
+        if (mockState.resolveFn) {
+          // resolveFn may return either a raw array or a P3-style
+          // `{ results: [...] }` envelope — normalize both.
+          const resolved = mockState.resolveFn(videos);
+          results = Array.isArray(resolved) ? resolved : resolved.results;
+        } else {
+          results = videos.map((v: any) => ({
             videoId: v.videoId,
             rewrittenTitle: `Honest: ${v.title}`,
             stamp: 'legitimate',
             stampExplanation: 'Test explanation'
-          }))
-        };
+          }));
+        }
+        for (const r of (results as any[])) {
+          yield {
+            videoId: r.videoId,
+            rewrittenTitle: r.rewrittenTitle ?? `Honest: ${r.title}`,
+            stamp: r.stamp ?? 'legitimate',
+            stampExplanation: r.stampExplanation ?? 'Test explanation'
+          };
+        }
       })
     }))
   }

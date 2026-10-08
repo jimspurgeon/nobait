@@ -57,7 +57,7 @@ export function parseStoryboardSpec(data: unknown): StoryboardSpec | null {
  */
 function extractSignature(template: string): string {
   const match = template.match(/[?&]sigh=([^&]+)/);
-  return match ? match[1] : '';
+  return match?.[1] ?? '';
 }
 
 /**

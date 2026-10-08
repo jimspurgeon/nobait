@@ -1,6 +1,16 @@
-import { describe, it, expect } from 'vitest';
-import { parseStampTier, parseBatchItem } from '../../ai/classify';
+import { describe, it, test, expect } from 'vitest';
+import {
+  parseStampTier,
+  parseBatchItem,
+  CLASSIFY_SYSTEM_PROMPT,
+  buildBatchUserPrompt,
+  parseBatchResponse,
+  sanitize,
+  toPromptVideo,
+  extractJsonArray,
+} from '../../ai/classify';
 import { StampTier } from '../../stamps/types';
+import type { VideoSignal } from '../../content/signals';
 
 describe('classify - strict parsing', () => {
   describe('parseStampTier', () => {
@@ -102,21 +112,6 @@ describe('classify - strict parsing', () => {
  *   - malformed JSON, missing tiers, or unknown tiers → UNSURE fallback.
  */
 
-import { describe, test, expect } from "vitest";
-import {
-  isStampTier,
-  StampTier,
-} from "../../stamps/types.js";
-import {
-  CLASSIFY_SYSTEM_PROMPT,
-  buildBatchUserPrompt,
-  parseBatchResponse,
-  sanitize,
-  toPromptVideo,
-  extractJsonArray,
-  unsureResult,
-} from "../../ai/classify.js";
-import type { VideoSignal } from "../../content/signals.js";
 
 describe("sanitize()", () => {
   test("collapses control chars and newlines to spaces", () => {

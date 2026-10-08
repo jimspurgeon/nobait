@@ -1,5 +1,6 @@
 import { parseBatchItem } from './classify';
-import { AIProvider } from './types';
+import type { AIProvider, AnalysisResult, BatchInput } from './types';
+import { StampTier, isStampTier } from '../stamps/types';
 
 /**
  * Current model version for cache invalidation
@@ -78,42 +79,11 @@ export class GeminiProvider implements AIProvider {
   }
 
   /**
-   * Analyze a single video (convenience wrapper - prefer analyzeBatch)
-   */
-  async analyze(input: {
-    title: string;
-    description?: string;
-    transcript?: string;
-    chapters?: Array<{ startMs: number; title: string }>;
-  }): Promise<{
-    rewrittenTitle: string;
-    stamp: string;
-    stampExplanation: string;
-  }> {
-    const batchResult = await this.analyzeBatch({
-      videos: [{
-        videoId: 'single',
-        title: input.title,
-        description: input.description,
-        transcript: input.transcript,
-        chapters: input.chapters
-      }],
-      modelVersion: MODEL_VERSION
-    });
-    const result = batchResult.results[0];
-    return {
-      rewrittenTitle: result.rewrittenTitle,
-      stamp: result.stamp,
-      stampExplanation: result.stampExplanation
-    };
-  }
-
-  /**
    * Batch analyze up to 20 videos in a single request.
    * Results are parsed chunk-by-chunk as they stream in; onPartialResult
    * fires for each video the moment its chunk completes.
    */
-  async analyzeBatch(input: {
+  async analyzeBatchCallback(input: {
     videos: Array<{
       videoId: string;
       title: string;
@@ -221,6 +191,65 @@ export class GeminiProvider implements AIProvider {
       return { results };
     } finally {
       clearTimeout(timeoutId);
+    }
+  }
+
+
+  /**
+   * Canonical AIProvider entry (P4 interface): yields AnalysisResults as
+   * they complete in the streamed response. Internally delegates to
+   * analyzeBatchCallback so streaming behavior is unchanged.
+   */
+  async *analyzeBatch(input: BatchInput): AsyncIterable<AnalysisResult> {
+    const videos = input.map((v) => ({
+      videoId: v.videoId,
+      title: v.title,
+      description: v.description,
+      transcript: v.transcript,
+      chapters: v.chapters?.map((c) => ({ ...c }))
+    }));
+    const queue: AnalysisResult[] = [];
+    let wakeup: (() => void) | undefined;
+
+    const promise = this.analyzeBatchCallback(
+      { videos, modelVersion: MODEL_VERSION },
+      (partial) => {
+        queue.push(toAnalysisResult(partial));
+        wakeup?.();
+      }
+    );
+
+    let settled = false;
+    let failure: unknown;
+    promise.then(
+      (full) => {
+        settled = true;
+        for (const r of full.results) {
+          const ar = toAnalysisResult(r);
+          if (!queue.some((q) => q.videoId === ar.videoId)) queue.push(ar);
+        }
+        wakeup?.();
+      },
+      (err) => {
+        settled = true;
+        failure = err;
+        wakeup?.();
+      }
+    );
+
+    let delivered = 0;
+    while (true) {
+      while (delivered < queue.length) {
+        yield queue[delivered]!;
+        delivered++;
+      }
+      if (settled) {
+        if (failure !== undefined) throw failure;
+        return;
+      }
+      await new Promise<void>((resolve) => {
+        wakeup = resolve;
+      });
     }
   }
 
@@ -439,4 +468,18 @@ function safeParse(text: string): unknown {
   } catch {
     return null;
   }
+}
+
+function toAnalysisResult(r: {
+  videoId: string;
+  rewrittenTitle: string;
+  stamp: string;
+  stampExplanation: string;
+}): AnalysisResult {
+  return {
+    videoId: r.videoId,
+    rewrittenTitle: r.rewrittenTitle,
+    stamp: isStampTier(r.stamp) ? r.stamp : (parseBatchItem(r)?.stamp ?? StampTier.UNSURE),
+    stampExplanation: r.stampExplanation
+  };
 }
