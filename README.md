@@ -63,14 +63,14 @@ content, nobait assigns an **unambiguous credibility stamp** that appears near
 the title on all surfaces (home feed, search results, watch page). The stamps
 are designed to be instantly recognizable and never ambiguous:
 
-| Stamp | Symbol | Color | Meaning |
-|---|---|---|---|
-| **Legitimate** | ✓ | Green | Accurate title, honest premise, content matches claims |
-| **Exaggerated** | ⚠ | Yellow | Claims are true but overstated, sensationalized framing |
-| **Misleading** | ✗ | Red | Title implies something false, content contradicts premise |
-| **Clickbait** | 🎣 | Orange | Withholding info, manufactured curiosity gap, "you won't believe" style |
-| **Fake** | ☠️ | Dark red | Completely fabricated premise, hoaxes, debunked claims |
-| **Unsure** | ? | Gray | Insufficient data for confidence (no transcript, too short) |
+| Stamp           | Symbol | Color    | Meaning                                                                 |
+| --------------- | ------ | -------- | ----------------------------------------------------------------------- |
+| **Legitimate**  | ✓      | Green    | Accurate title, honest premise, content matches claims                  |
+| **Exaggerated** | ⚠      | Yellow   | Claims are true but overstated, sensationalized framing                 |
+| **Misleading**  | ✗      | Red      | Title implies something false, content contradicts premise              |
+| **Clickbait**   | 🎣     | Orange   | Withholding info, manufactured curiosity gap, "you won't believe" style |
+| **Fake**        | ☠️     | Dark red | Completely fabricated premise, hoaxes, debunked claims                  |
+| **Unsure**      | ?      | Gray     | Insufficient data for confidence (no transcript, too short)             |
 
 Stamps are determined by the AI backend analyzing whether the video's actual
 content supports its original framing. The classification is cached alongside
@@ -86,12 +86,12 @@ or switch to alternative icon sets.
 nobait is backend-agnostic with a pluggable provider interface. The design
 goals for backends are: **free, fast, private**.
 
-| Backend | Status | Notes |
-|---|---|---|
+| Backend                                                            | Status          | Notes                                                                                                                                              |
+| ------------------------------------------------------------------ | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Local server (Ollama / llamafile / any OpenAI-compatible endpoint) | Planned default | Full control, works offline, zero cost, perfectly private — and works identically in Firefox and Chrome. Also performs credibility classification. |
-| Google AI Studio (Gemini API free tier) | Planned | Bring-your-own key; generous free tier, fast flash-class models. Likely the easiest zero-setup option for most users. |
-| Custom OpenAI-compatible endpoint | Planned | Any provider you like, self-hosted or otherwise. |
-| Chrome built-in AI (Gemini Nano via Prompt API) | Planned bonus | On-device and fully offline, but Chromium-only — offered as an extra backend when running in a browser that supports it. |
+| Google AI Studio (Gemini API free tier)                            | Planned         | Bring-your-own key; generous free tier, fast flash-class models. Likely the easiest zero-setup option for most users.                              |
+| Custom OpenAI-compatible endpoint                                  | Planned         | Any provider you like, self-hosted or otherwise.                                                                                                   |
+| Chrome built-in AI (Gemini Nano via Prompt API)                    | Planned bonus   | On-device and fully offline, but Chromium-only — offered as an extra backend when running in a browser that supports it.                           |
 
 A single AI prompt handles both **title rewriting** and **credibility
 classification**, keeping token usage efficient. The same aggressive cache

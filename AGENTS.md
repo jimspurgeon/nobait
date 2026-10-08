@@ -121,7 +121,7 @@ LICENSE
 
 - Only include Chrome-specific code if:
   - It's behind a feature detection gate (`typeof chrome !== 'undefined' &&
-    chrome.i18n?.acceptLanguage`),
+chrome.i18n?.acceptLanguage`),
   - A Firefox-compatible fallback exists,
   - And the complexity gain is minimal (<50 LOC per feature).
 - Examples of acceptable Chrome-only features:
@@ -203,12 +203,12 @@ free-form):
 ```typescript
 // src/stamps/types.ts
 export enum StampTier {
-  LEGITIMATE = 'legitimate', // ✓ green  — accurate, honest, matches content
-  EXAGGERATED = 'exaggerated', // ⚠ yellow — true but overstated/sensationalized
-  MISLEADING = 'misleading', // ✗ red    — title implies something false
-  CLICKBAIT = 'clickbait',   // 🎣 orange — withholding, manufactured curiosity
-  FAKE = 'fake',             // ☠️ dark red — fabricated premise/debunked
-  UNSURE = 'unsure',         // ? gray   — insufficient signal data
+  LEGITIMATE = "legitimate", // ✓ green  — accurate, honest, matches content
+  EXAGGERATED = "exaggerated", // ⚠ yellow — true but overstated/sensationalized
+  MISLEADING = "misleading", // ✗ red    — title implies something false
+  CLICKBAIT = "clickbait", // 🎣 orange — withholding, manufactured curiosity
+  FAKE = "fake", // ☠️ dark red — fabricated premise/debunked
+  UNSURE = "unsure", // ? gray   — insufficient signal data
 }
 ```
 
@@ -288,7 +288,7 @@ YouTube is a dynamic SPA. Key points:
   `MutationObserver` on `document.body`.
 - **Navigation handling**:
   - Firefox: Use the `navigation` event (if available) or detect `history.pushState`
-    + popstate.
+    - popstate.
   - Fallback: Poll `window.location` every ~100ms and observe URL changes.
 - **DOM stability**: Wait for key YouTube containers (`#movie_player`,
   `ytd-watch-flexy`, `ytd-video-primary-info-renderer`) before patching. Retry
@@ -301,9 +301,9 @@ Example selector structure:
 ```typescript
 // src/content/dom.ts
 export const SELECTORS = {
-  TITLE: '#video-title, #text.ytd-video-renderer',
-  THUMBNAIL: 'ytd-thumbnail #img',
-  DESCRIPTION: '#description-ytd-player',
+  TITLE: "#video-title, #text.ytd-video-renderer",
+  THUMBNAIL: "ytd-thumbnail #img",
+  DESCRIPTION: "#description-ytd-player",
   // ...
 };
 ```
@@ -368,7 +368,7 @@ transcripts).
 1. Ensure `npm test`, `npm run lint`, and `npm run typecheck` pass.
 2. Rebase on upstream `main` to avoid merge conflicts.
 3. Write conventional commits: `feat: add storyboard parser`, `fix: handle
-   missing transcript`.
+missing transcript`.
 4. Include a brief description of changes, testing steps, and any breaking
    changes.
 

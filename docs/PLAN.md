@@ -9,17 +9,17 @@ that constraint.
 
 ## 1. Performance budget
 
-The extension must feel invisible. Budget (measured from *element scrolled
-into viewport* to *fully patched DOM*):
+The extension must feel invisible. Budget (measured from _element scrolled
+into viewport_ to _fully patched DOM_):
 
-| Scenario | Budget | Achieved by |
-|---|---|---|
-| Cache hit (title + stamp + thumbnail) | ≤ 16 ms (one frame) | IndexedDB read, pre-composed blob URLs |
-| Cache hit, thumbnail not yet composited | ≤ 100 ms | Pre-warmed cache in background, canvas crop |
-| Cold, fast backend (Flash-Lite class) | ≤ 700 ms | Sub-second model, streaming patch |
-| Cold, local Ollama | ≤ 2 s | Small quantized model |
-| Cold, with fact-check lookup | ≤ 1.2 s (lookup races in parallel) | Strict 400 ms lookup timeout |
-| Anything failing | degrade silently | Original title/thumbnail always preserved |
+| Scenario                                | Budget                             | Achieved by                                 |
+| --------------------------------------- | ---------------------------------- | ------------------------------------------- |
+| Cache hit (title + stamp + thumbnail)   | ≤ 16 ms (one frame)                | IndexedDB read, pre-composed blob URLs      |
+| Cache hit, thumbnail not yet composited | ≤ 100 ms                           | Pre-warmed cache in background, canvas crop |
+| Cold, fast backend (Flash-Lite class)   | ≤ 700 ms                           | Sub-second model, streaming patch           |
+| Cold, local Ollama                      | ≤ 2 s                              | Small quantized model                       |
+| Cold, with fact-check lookup            | ≤ 1.2 s (lookup races in parallel) | Strict 400 ms lookup timeout                |
+| Anything failing                        | degrade silently                   | Original title/thumbnail always preserved   |
 
 Hard rules:
 
@@ -68,33 +68,37 @@ run fetches/inference regardless of tab state. Message payloads are kept tiny
 For each newly observed video, in order:
 
 ### Stage 0 — Observe (content script, ≤ 1 ms per batch)
+
 - `MutationObserver` callbacks are collected and flushed **once per animation
   frame** (coalesced), then mapped through `SELECTORS` to lightweight
   `VideoCard` descriptors.
 - An `IntersectionObserver` with `rootMargin: '600px 0px'` fires evaluation
-  for cards *before* they're visible — by the time the user scrolls, the
+  for cards _before_ they're visible — by the time the user scrolls, the
   result is often already cached. This is the single biggest perceived-speed
   win.
 
 ### Stage 1 — Cache check (background, ≤ 5 ms)
+
 - Key: `videoId` (+ model/prompt version tag for invalidation).
 - Hit → result dispatched immediately, thumbnail blob URL if composited.
 - Negative cache: videos that previously produced no useful result (e.g.,
   no transcript) are remembered with a shorter TTL so we don't re-pay.
 
 ### Stage 2 — Signal gathering (background, parallel, ≤ 300 ms)
+
 All fetches race concurrently with a hard timeout:
 
-| Signal | Source | Timeout |
-|---|---|---|
-| Description + chapters | InnerTube `player` / `next` endpoint (already what the page itself fetched) | 250 ms |
-| Transcript | InnerTube `get_transcript` / `timedtext` | 300 ms |
-| View/like ratio, channel | from page data | free |
+| Signal                   | Source                                                                      | Timeout |
+| ------------------------ | --------------------------------------------------------------------------- | ------- |
+| Description + chapters   | InnerTube `player` / `next` endpoint (already what the page itself fetched) | 250 ms  |
+| Transcript               | InnerTube `get_transcript` / `timedtext`                                    | 300 ms  |
+| View/like ratio, channel | from page data                                                              | free    |
 
 Signals that miss their deadline are simply dropped — the AI evaluates with
 whatever arrived. **Missing signals never block.**
 
 ### Stage 3 — AI inference (background, ≤ 700 ms target)
+
 - **Batching is king**: visible/pending cards are grouped into one structured
   request (up to 20 videos per call) with strict JSON-schema output. One
   round trip evaluates the whole screenful of recommendations.
@@ -107,6 +111,7 @@ whatever arrived. **Missing signals never block.**
   (≤ 100 tokens/video) — total generation per batch stays tiny.
 
 ### Stage 4 — Fact-check lookup (parallel with Stage 3, opt-in)
+
 - Only when the batch's initial stamp leans `FAKE` or the topic is
   claim-heavy (news, health, finance keywords), fire
   `factchecktools.googleapis.com` `claims.search` (free, ~100–200 ms).
@@ -116,18 +121,19 @@ whatever arrived. **Missing signals never block.**
   never sits on the critical path.
 
 ### Stage 5 — Patch + animate (content script)
+
 Results are written to the DOM with the animation described in §6.
 
 ---
 
 ## 4. AI backend selection (speed-ordered)
 
-| Priority | Backend | Expected latency | Notes |
-|---|---|---|---|
-| 1 | Chrome built-in Prompt API (Gemini Nano) | 100–400 ms | Zero network. Chromium-only bonus. |
-| 1 | Local Ollama / llama.cpp (`qwen3:0.6b`-class, Q8) | 100–500 ms | Zero network, Firefox-friendly. Suggested default for power users. |
-| 2 | Hosted Flash-Lite class (Gemini free tier) | 500–900 ms p50 | Suggested default for everyone else. Batch requests amortize latency. |
-| 3 | Any OpenAI-compatible endpoint | varies | User-configured. |
+| Priority | Backend                                           | Expected latency | Notes                                                                 |
+| -------- | ------------------------------------------------- | ---------------- | --------------------------------------------------------------------- |
+| 1        | Chrome built-in Prompt API (Gemini Nano)          | 100–400 ms       | Zero network. Chromium-only bonus.                                    |
+| 1        | Local Ollama / llama.cpp (`qwen3:0.6b`-class, Q8) | 100–500 ms       | Zero network, Firefox-friendly. Suggested default for power users.    |
+| 2        | Hosted Flash-Lite class (Gemini free tier)        | 500–900 ms p50   | Suggested default for everyone else. Batch requests amortize latency. |
+| 3        | Any OpenAI-compatible endpoint                    | varies           | User-configured.                                                      |
 
 Design constraints on every provider:
 
@@ -166,6 +172,7 @@ always fully visible until the replacement arrives — no spinners, no blank
 placeholders.
 
 ### Title rewrite — "decode" effect
+
 1. When the new title arrives, measure its length difference from the
    original.
 2. Characters scramble between random glyphs for ~200 ms (monospace-neutral
@@ -174,11 +181,12 @@ placeholders.
 3. **Adaptive duration**: if inference completed in < 150 ms (cache hit or
    Nano-speed backend), the scramble shortens to ~120 ms or is skipped
    entirely for a subtle crossfade. Speed wins; flair fills the remainder.
-4. Implemented as one rAF loop per *batch* of elements (not per element) —
+4. Implemented as one rAF loop per _batch_ of elements (not per element) —
    hundreds of simultaneous decodes stay at 60 fps because it's a single
    transform/text pass.
 
 ### Thumbnail swap — pixel-grid dissolve
+
 The signature effect: the clickbait thumbnail **pixelates into a coarse,
 blurred mosaic that morphs into the real video frame**.
 
@@ -211,10 +219,12 @@ Performance rules:
 - `prefers-reduced-motion`: collapses to a plain crossfade.
 
 ### Stamp — pop-in
+
 Badge scales from 0.6 → 1.0 with a slight overshoot (spring curve, ~180 ms)
 and a shimmer sweep. Cheap, one-shot `Element.animate()`.
 
 ### Accessibility & respect
+
 - Full `prefers-reduced-motion` support: all animations collapse to instant
   swaps.
 - Animations never re-trigger for the same video on SPA navigations.
@@ -294,15 +304,15 @@ src/
 
 ## 10. Build phases
 
-| Phase | Deliverable | Exit criteria |
-|---|---|---|
-| **P1 — Skeleton** | Manifest (MV3, FF+Chrome), TS + Vite build, empty content/background that logs video IDs | Loads on YouTube, observes SPA nav |
-| **P2 — Thumbnails** | Storyboard parse → deterministic frame → swap with crossfade | 60-card grid swaps at 60fps, blob-cached |
-| **P3 — Cache + Gemini** | IndexedDB, batch structured prompt, title rewrite + stamp tier via Flash-Lite | One AI call per screenful; parse-strict; negative cache works |
-| **P4 — Local & on-device** | Ollama backend, Chrome Prompt API backend, fallback chain | Works fully offline w/ local model |
-| **P5 — Delight** | Decode animation (adaptive), stamp pop-in, tooltips w/ explanations | Reduced-motion respected; no jank with 60 simultaneous patches |
-| **P6 — Fact-check layer** | ClaimReview racing lookups, tooltip sources | 400ms timeout proven by test |
-| **P7 — Options + polish** | Settings UI, channel allowlist, cache controls, perf panel | E2E suite green on FF + Chrome; AMO-ready `.xpi` |
+| Phase                      | Deliverable                                                                              | Exit criteria                                                  |
+| -------------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| **P1 — Skeleton**          | Manifest (MV3, FF+Chrome), TS + Vite build, empty content/background that logs video IDs | Loads on YouTube, observes SPA nav                             |
+| **P2 — Thumbnails**        | Storyboard parse → deterministic frame → swap with crossfade                             | 60-card grid swaps at 60fps, blob-cached                       |
+| **P3 — Cache + Gemini**    | IndexedDB, batch structured prompt, title rewrite + stamp tier via Flash-Lite            | One AI call per screenful; parse-strict; negative cache works  |
+| **P4 — Local & on-device** | Ollama backend, Chrome Prompt API backend, fallback chain                                | Works fully offline w/ local model                             |
+| **P5 — Delight**           | Decode animation (adaptive), stamp pop-in, tooltips w/ explanations                      | Reduced-motion respected; no jank with 60 simultaneous patches |
+| **P6 — Fact-check layer**  | ClaimReview racing lookups, tooltip sources                                              | 400ms timeout proven by test                                   |
+| **P7 — Options + polish**  | Settings UI, channel allowlist, cache controls, perf panel                               | E2E suite green on FF + Chrome; AMO-ready `.xpi`               |
 
 ---
 
@@ -313,7 +323,7 @@ src/
    per-video responsiveness.
 2. **Lookahead evaluation via IntersectionObserver (600 px)** means
    inference usually finishes before the card is seen — the animation
-   becomes the *only* visible delay, and it's beautiful by design.
+   becomes the _only_ visible delay, and it's beautiful by design.
 3. **Small models are sufficient.** Renaming a title and picking one of six
    enums is a toy task for modern sub-1B models and Flash-Lite tiers; we
    lean on strict prompting/schema rather than model scale.
