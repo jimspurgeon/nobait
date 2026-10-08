@@ -16,14 +16,14 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "lint": "eslint src --ext .ts,.tsx && prettier --check src",
-    "lint:fix": "eslint src --ext .ts,.tsx --fix && prettier --write src"
+    "lint": "eslint src && prettier --check src",
+    "lint:fix": "eslint src --fix && prettier --write src"
   },
   "engines": {
     "node": ">=18"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
+    "@eslint/js": "8.57.1",
     "@playwright/test": "^1.49.0",
     "@types/chrome": "^0.3.4",
     "@types/firefox-webext-browser": "^143.0.1",
@@ -40,6 +40,7 @@
     "playwright": "^1.49.0",
     "prettier": "^3.9.9",
     "typescript": "^5.7.2",
+    "typescript-eslint": "^8.71.1",
     "vite": "^5.4.10",
     "vitest": "^2.1.4"
   },

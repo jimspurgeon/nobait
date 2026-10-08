@@ -11,6 +11,7 @@ class FakeIDB {
   negative = new Map<string, NegativeCacheEntry>();
 
   buildMockDB(): IDBDatabase {
+    const { analysis, negative } = this;
     const buildStore = (map: Map<string, any>, deleted: Set<string>) => ({
       get: (key: string) => makeIDBRequest(map.get(key)),
       put: (value: any) => {
@@ -25,13 +26,12 @@ class FakeIDB {
       openCursor: () => makeIDBRequest(null),
     });
 
-    const self = this;
     return {
       transaction: (storeName: string, _mode?: IDBTransactionMode) => ({
         objectStore: () =>
           storeName === "analysis"
-            ? buildStore(self.analysis, new Set())
-            : buildStore(self.negative, new Set()),
+            ? buildStore(analysis, new Set())
+            : buildStore(negative, new Set()),
         abort: () => {},
       }),
       close: () => {},

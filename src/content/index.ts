@@ -26,7 +26,7 @@ const seen = new Map<
 >();
 
 /** Fair scheduling for IntersectionObserver callbacks */
-let pendingCards = new Set<HTMLElement>();
+const pendingCards = new Set<HTMLElement>();
 let rafId: number | null = null;
 
 async function main(): Promise<void> {

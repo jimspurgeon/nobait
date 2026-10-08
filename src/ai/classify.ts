@@ -85,6 +85,7 @@ export function sanitize(
   maxChars: number = MAX_FIELD_CHARS,
 ): string {
   const flat = text
+    // eslint-disable-next-line no-control-regex -- stripping C0 control chars (incl. \n, \t) before JSON/token round-trips
     .replace(/[\u0000-\u001f\u007f]/g, " ")
     .replace(/\s+/g, " ")
     .trim();

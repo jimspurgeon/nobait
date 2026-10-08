@@ -153,14 +153,12 @@ describe("OllamaProvider", () => {
   });
 
   test("HTTP error status → descriptive Error", async () => {
-    const fetchFn = vi
-      .fn()
-      .mockResolvedValue(
-        new Response("<html>Bad Gateway</html>", {
-          status: 502,
-          statusText: "Bad Gateway",
-        }),
-      );
+    const fetchFn = vi.fn().mockResolvedValue(
+      new Response("<html>Bad Gateway</html>", {
+        status: 502,
+        statusText: "Bad Gateway",
+      }),
+    );
     const p = new OllamaProvider({ model: "m", fetchFn });
     await expect(collect(p.analyzeBatch(mkBatch(1)))).rejects.toThrow(
       /HTTP 502/,

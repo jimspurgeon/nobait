@@ -38,9 +38,6 @@ export class EvaluationScheduler {
   /** Listeners for incremental (streaming) results */
   private resultListeners: Set<(result: StampResult) => void> = new Set();
 
-  /** Use getInstance() in application code; constructor is public for tests */
-  constructor() {}
-
   static getInstance(): EvaluationScheduler {
     if (!EvaluationScheduler.instance) {
       EvaluationScheduler.instance = new EvaluationScheduler();
