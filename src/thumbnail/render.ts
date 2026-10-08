@@ -28,7 +28,7 @@ export async function composeFrame(
   spriteUrl: string,
   level: StoryboardLevel,
   rect: TileRect,
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: typeof fetch = fetch.bind(globalThis)
 ): Promise<string> {
   const resp = await fetchImpl(spriteUrl, { credentials: 'omit' });
   if (!resp.ok) {

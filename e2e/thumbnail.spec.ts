@@ -100,6 +100,7 @@ async function mockYouTube(page: Page): Promise<Counters> {
     }
 
     // InnerTube player endpoint → storyboard spec for the requested video.
+    // The query key is the runtime-extracted stub ('TEST_KEY_NOT_SECRET').
     if (url.hostname === 'www.youtube.com' && url.pathname === '/youtubei/v1/player') {
       counters.player++;
       const body = (route.request().postData() ?? '') as string;
@@ -139,6 +140,18 @@ async function mockYouTube(page: Page): Promise<Counters> {
 }
 
 async function loadExtension(page: Page): Promise<void> {
+  // The content script extracts the InnerTube API key from the page's own
+  // ytcfg at runtime (no hardcoded key). Install a stub with a dummy,
+  // non-secret value before injecting so the mocked player endpoint can
+  // be reached. addInitScript covers page loads (incl. reload), and the
+  // direct define() covers this already-loaded document.
+  const stubYtcfg = (): void => {
+    (window as unknown as { ytcfg: unknown }).ytcfg = {
+      get: (k: string): string | undefined => (k === 'INNERTUBE_API_KEY' ? 'TEST_KEY_NOT_SECRET' : undefined),
+    };
+  };
+  await page.addInitScript(stubYtcfg);
+  await page.evaluate(stubYtcfg);
   await page.addScriptTag({ path: 'dist/firefox/content.js', type: 'module' });
 }
 

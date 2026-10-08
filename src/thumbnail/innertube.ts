@@ -66,7 +66,7 @@ const WEB_CONTEXT = {
  */
 export async function fetchPlayerResponse(
   videoId: string,
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: typeof fetch = fetch.bind(globalThis)
 ): Promise<unknown> {
   const apiKey = getInnerTubeApiKey();
   if (!apiKey) {

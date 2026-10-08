@@ -96,7 +96,10 @@ export class ThumbnailManager {
 
   constructor(opts: { position?: FramePosition; fetchImpl?: typeof fetch } = {}) {
     this.position = opts.position ?? { kind: 'middle' };
-    this.fetchImpl = opts.fetchImpl ?? fetch;
+    // Bind the native fetch: storing it unbound and invoking it as a
+    // method (`this.fetchImpl(...)`) detaches it from its Window receiver
+    // and throws "Illegal invocation" in Chromium/Firefox.
+    this.fetchImpl = opts.fetchImpl ?? fetch.bind(globalThis);
   }
 
   setPosition(position: FramePosition): void {
