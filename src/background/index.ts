@@ -3,6 +3,7 @@ import { cacheDB } from '../storage/cache';
 import { aiProviderFactory } from '../ai/factory';
 import { GeminiProvider } from '../ai/gemini';
 import { AIInput, StampResult } from '../stamps/types';
+import { evaluateFactCheck, StampTier as FactCheckTier } from './factcheck';
 
 declare const browser: any;
 declare const chrome: any;
@@ -129,7 +130,20 @@ class BackgroundWorker {
       chapters: payload.chapters
     };
 
+    // Fact-check layer (P6): runs in parallel with AI inference and can
+    // only strengthen a FAKE-leaning stamp, never delay or soften it.
+    const factCheckPromise = evaluateFactCheck(
+      input.videoId,
+      { title: input.title, description: input.description ?? '' },
+      FactCheckTier.UNSURE
+    );
+
     const result = await scheduler.evaluate(input);
+    const factCheck = await factCheckPromise;
+
+    if (result && factCheck.result && factCheck.result.changed) {
+      result.stamp = factCheck.result.stamp;
+    }
     return { success: true, result: result || undefined };
   }
 

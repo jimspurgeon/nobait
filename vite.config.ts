@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 import { resolve } from 'path';
-import { cpSync } from 'node:fs';
+import { cpSync, existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 
 const target = process.env.VITE_TARGET || 'firefox';
 
@@ -24,13 +24,32 @@ export default defineConfig(({ mode }) => ({
     minify: mode === 'production',
     outDir: `dist/${target}`,
     emptyOutDir: true,
-    cssCodeSplit: true,
-    closeBundle() {
-      // src/manifest.json is canonical — place it at the dist root.
-      cpSync(resolve(__dirname, 'src/manifest.json'), resolve(__dirname, `dist/${target}/manifest.json`));
-      cpSync(resolve(__dirname, 'src/styles/base.css'), resolve(__dirname, `dist/${target}/content.css`));
-    }
+    cssCodeSplit: true
   },
+  // src/manifest.json is canonical — place it at the dist root (proper
+  // Rollup plugin hook, fires after the bundle is written).
+  plugins: [
+    {
+      name: 'copy-extension-assets',
+      closeBundle() {
+        const dist = resolve(__dirname, `dist/${target}`);
+        cpSync(resolve(__dirname, 'src/manifest.json'), resolve(dist, 'manifest.json'));
+        cpSync(resolve(__dirname, 'src/styles/base.css'), resolve(dist, 'content.css'));
+        // Vite emits the options page under src/options/index.html (mirroring
+        // its source path); the manifest expects assets/options.html.
+        const emitted = resolve(dist, 'src/options/index.html');
+        const wanted = resolve(dist, 'assets/options.html');
+        if (existsSync(emitted)) {
+          renameSync(emitted, wanted);
+          rmSync(resolve(dist, 'src'), { recursive: true, force: true });
+          // Rewrite the absolute /options.js script ref to a relative path.
+          const html = readFileSync(wanted, 'utf8')
+            .replace('src="/options.js"', 'src="../options.js"');
+          writeFileSync(wanted, html);
+        }
+      }
+    }
+  ],
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src')
