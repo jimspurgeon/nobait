@@ -171,6 +171,42 @@ describe("animateStampPop", () => {
     expect(el.style.transform).toBe("");
     expect(onDone).toHaveBeenCalledOnce();
   });
+
+  it("adds a shimmer sweep class that is removed when the pop settles", () => {
+    makeMotionMedia(false);
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    animateStampPop(el, { videoId: "s4", timing: { inferenceMs: 400 } });
+    expect(el.className).toContain("nobait-stamp-shimmer");
+    // Shimmer duration tracks the adaptive pop budget (full = 180ms).
+    expect(el.style.getPropertyValue("--nobait-shimmer-ms")).toBe("180ms");
+    advanceFrames(20); // > 180ms
+    expect(el.className).not.toContain("nobait-stamp-shimmer");
+    // Stylesheet is injected exactly once per document.
+    const sheets = document.querySelectorAll("#nobait-shimmer-styles");
+    expect(sheets.length).toBe(1);
+  });
+
+  it("compresses the shimmer with the quick pop budget", () => {
+    makeMotionMedia(false);
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    animateStampPop(el, {
+      videoId: "s5",
+      timing: { inferenceMs: 40, cached: true },
+    });
+    expect(el.style.getPropertyValue("--nobait-shimmer-ms")).toBe("120ms");
+    advanceFrames(20);
+    expect(el.className).not.toContain("nobait-stamp-shimmer");
+  });
+
+  it("never attaches the shimmer in instant mode", () => {
+    makeMotionMedia(true);
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    animateStampPop(el, { videoId: "s6", timing: { inferenceMs: 900 } });
+    expect(el.className).not.toContain("nobait-stamp-shimmer");
+  });
 });
 
 describe("shared loop hygiene", () => {

@@ -310,11 +310,60 @@ export interface PopOptions {
 }
 
 /**
- * Spring pop-in for the credibility badge: scale 0.6 → 1.0 with
- * overshoot (~180 ms) + a diagonal shimmer sweep. Uses the shared
- * rAF loop with transform-only animation (GPU-composited).
+ * Shimmer sweep stylesheet (idempotent, injected once per document).
  *
- * For instant mode the badge is inserted at final scale.
+ * The ::after overlay is a translucent diagonal light bar swept across
+ * the badge via `transform` only (GPU-composited, no layout work). The
+ * highlight color comes from a CSS variable so light/dark themes can
+ * tune it; the default (white @ 55% alpha) reads well on both YouTube
+ * themes and every stamp-tier color, which are themselves theme-aware.
+ */
+const SHIMMER_STYLE_ID = "nobait-shimmer-styles";
+const SHIMMER_CLASS = "nobait-stamp-shimmer";
+
+function injectShimmerStyles(): void {
+  if (document.getElementById(SHIMMER_STYLE_ID)) return;
+  const style = document.createElement("style");
+  style.id = SHIMMER_STYLE_ID;
+  style.textContent = `
+.${SHIMMER_CLASS} { position: relative; overflow: hidden; }
+.${SHIMMER_CLASS}::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(120deg,
+    transparent 20%,
+    var(--nobait-shimmer-color, rgba(255, 255, 255, 0.55)) 50%,
+    transparent 80%);
+  animation: nobait-shimmer-sweep var(--nobait-shimmer-ms, 180ms) ease-out forwards;
+}
+@keyframes nobait-shimmer-sweep {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .${SHIMMER_CLASS}::after { animation: none; display: none; }
+}
+`;
+  // Style injection must never break the pop-in, whatever the host
+  // page's CSP or DOM state (jsdom also warns on some modern CSS).
+  try {
+    document.head?.appendChild(style);
+  } catch {
+    /* shimmer is decorative — skip silently */
+  }
+}
+
+/**
+ * Spring pop-in for the credibility badge: scale 0.6 → 1.0 with
+ * overshoot (~180 ms) + a diagonal shimmer sweep. Scale/opacity run on
+ * the shared rAF loop (transform-only, GPU-composited); the shimmer is
+ * a CSS keyframe on a ::after overlay — also transform-only, and it
+ * collapses under `prefers-reduced-motion` via the media query above
+ * *and* the instant-mode guard below (belt and suspenders).
+ *
+ * For instant mode the badge is inserted at final scale, no shimmer.
  */
 export function animateStampPop(el: HTMLElement, opts: PopOptions): AnimMode {
   const mode =
@@ -324,12 +373,23 @@ export function animateStampPop(el: HTMLElement, opts: PopOptions): AnimMode {
   perfMark("pop:start", { detail: { videoId: opts.videoId, mode, dur } });
 
   if (mode === "instant" || dur <= 0 || reduceMotion()) {
+    el.classList.remove(SHIMMER_CLASS);
     el.style.transform = "";
     el.style.opacity = "1";
     opts.onDone?.();
     perfMark("pop:end", { detail: { videoId: opts.videoId, mode: "instant" } });
     return mode;
   }
+
+  // Shimmer sweep rides alongside the spring pop, driven by a CSS
+  // keyframe so it never touches the rAF budget.
+  injectShimmerStyles();
+  const shimmerMs = Math.max(dur, 120);
+  el.style.setProperty("--nobait-shimmer-ms", `${shimmerMs}ms`);
+  el.classList.remove(SHIMMER_CLASS);
+  // Restart the keyframe if a previous shimmer is still attached.
+  void (el as HTMLElement).offsetWidth; // reflow to restart animation
+  el.classList.add(SHIMMER_CLASS);
 
   const animId = `pop:${opts.videoId}`;
   unschedule(animId);
@@ -346,6 +406,7 @@ export function animateStampPop(el: HTMLElement, opts: PopOptions): AnimMode {
     if (u >= 1) {
       el.style.transform = "scale(1)";
       el.style.opacity = "1";
+      el.classList.remove(SHIMMER_CLASS);
       perfMark("pop:end", { detail: { videoId: opts.videoId, mode } });
       perfMeasure("pop:duration", "pop:start", "pop:end");
       opts.onDone?.();

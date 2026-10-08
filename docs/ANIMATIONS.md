@@ -80,7 +80,19 @@ Failure modes: if the frame fails to decode, the src is hard-swapped
   underdamped spring `springCurve(u) = 1 − 0.4·e^(−6u)·cos(9.5u)`
   (~180 ms).
 - Opacity ramps 0.5 → 1 in parallel.
-- Transform-only (GPU-composited), single style write per frame.
+- A diagonal **shimmer sweep** rides alongside: a `::after` overlay
+  (translucent 120° light gradient) translates from −100% to +100%
+  via a CSS keyframe, injected once per document as
+  `#nobait-shimmer-styles`. Its duration is set per-badge via the
+  `--nobait-shimmer-ms` custom property so it tracks the adaptive
+  pop budget (180 ms full / 120 ms quick), and its color is tunable
+  per theme via `--nobait-shimmer-color` (default white @ 55% alpha,
+  which reads on both YouTube light and dark themes).
+- Both the scale ramp (rAF, transform-only) and the shimmer
+  (keyframe, transform-only) are GPU-composited; neither triggers
+  layout or paint of the badge itself. The shimmer collapses under
+  `prefers-reduced-motion` via both a media-query rule and the
+  instant-mode guard, and the class is removed when the pop settles.
 
 ## 4. Performance model
 
