@@ -4,7 +4,8 @@
 
 **Better YouTube titles and thumbnails — powered by AI, not crowdsourcing.**
 
-No more ALL CAPS, shocking faces, red arrows, and "you won't believe what happened next."
+No more ALL CAPS, shocking faces, red arrows, and "you won't believe what happened next.",
+plus instant visual stamps showing whether a video is legitimate, exaggerated, or outright false.
 
 **Primary platform: Firefox.** Chrome/Chromium support is included if the code stays portable.
 
@@ -17,8 +18,9 @@ No more ALL CAPS, shocking faces, red arrows, and "you won't believe what happen
 nobait is a free and open source browser extension inspired by
 [DeArrow](https://dearrow.ajay.app). Where DeArrow relies on crowdsourced human
 submissions, nobait uses freely available AI to generate accurate, non-sensational
-titles on the fly — and replaces clickbait thumbnails with an actual frame from
-the video.
+titles on the fly, swap clickbait thumbnails with actual video frames, and affix
+a visual **credibility stamp** that instantly tells you if the video is
+legitimate, exaggerated-but-true, or completely misleading.
 
 Everything runs client-side in your browser. No accounts, no telemetry, no
 central database.
@@ -54,6 +56,31 @@ Storyboards are fetched with the same credentials-free requests your browser
 already makes to `i.ytimg.com`, so thumbnail replacement costs no API quota and
 adds only tens of kilobytes per video.
 
+### Credibility Stamps
+
+After analyzing the video's title, description, transcript, and (optionally)
+content, nobait assigns an **unambiguous credibility stamp** that appears near
+the title on all surfaces (home feed, search results, watch page). The stamps
+are designed to be instantly recognizable and never ambiguous:
+
+| Stamp | Symbol | Color | Meaning |
+|---|---|---|---|
+| **Legitimate** | ✓ | Green | Accurate title, honest premise, content matches claims |
+| **Exaggerated** | ⚠ | Yellow | Claims are true but overstated, sensationalized framing |
+| **Misleading** | ✗ | Red | Title implies something false, content contradicts premise |
+| **Clickbait** | 🎣 | Orange | Withholding info, manufactured curiosity gap, "you won't believe" style |
+| **Fake** | ☠️ | Dark red | Completely fabricated premise, hoaxes, debunked claims |
+| **Unsure** | ? | Gray | Insufficient data for confidence (no transcript, too short) |
+
+Stamps are determined by the AI backend analyzing whether the video's actual
+content supports its original framing. The classification is cached alongside
+the rewritten title. Users can hover over any stamp to see a brief explanation
+(e.g., "Title promises X but video never addresses X" or "Claims verified against
+transcript").
+
+Stamp styling is customizable in options: toggle visibility, adjust placement,
+or switch to alternative icon sets.
+
 ## AI backends
 
 nobait is backend-agnostic with a pluggable provider interface. The design
@@ -61,14 +88,14 @@ goals for backends are: **free, fast, private**.
 
 | Backend | Status | Notes |
 |---|---|---|
-| Local server (Ollama / llamafile / any OpenAI-compatible endpoint) | Planned default | Full control, works offline, zero cost, perfectly private — and works identically in Firefox and Chrome. |
+| Local server (Ollama / llamafile / any OpenAI-compatible endpoint) | Planned default | Full control, works offline, zero cost, perfectly private — and works identically in Firefox and Chrome. Also performs credibility classification. |
 | Google AI Studio (Gemini API free tier) | Planned | Bring-your-own key; generous free tier, fast flash-class models. Likely the easiest zero-setup option for most users. |
 | Custom OpenAI-compatible endpoint | Planned | Any provider you like, self-hosted or otherwise. |
 | Chrome built-in AI (Gemini Nano via Prompt API) | Planned bonus | On-device and fully offline, but Chromium-only — offered as an extra backend when running in a browser that supports it. |
 
-An aggressive cache combined with small prompts (titles are short!) keeps
-backend usage minimal. Cached entries expire after a configurable TTL so
-re-visits stay fresh without repeated calls.
+A single AI prompt handles both **title rewriting** and **credibility
+classification**, keeping token usage efficient. The same aggressive cache
+applies to stamps, so revisit performance stays snappy.
 
 ## Platform support
 
@@ -90,12 +117,14 @@ offered behind feature detection; everything else works the same everywhere.
 - [ ] Core: YouTube SPA-aware content script (MutationObserver + navigation events)
 - [ ] Title rewriting across all surfaces (home, search, sidebar, shorts shelf, embeds)
 - [ ] Signal collection: description, chapters, transcript
-- [ ] Cache layer (IndexedDB, per-video TTL)
+- [ ] Cache layer (IndexedDB, per-video TTL for titles + stamps)
+- [ ] Credibility classification engine (6-tier stamp system)
+- [ ] Stamp rendering & hover tooltips (explanation text)
 - [ ] On-device AI backend (Chrome built-in Prompt API)
 - [ ] BYO-key Gemini backend
 - [ ] Local/OpenAI-compatible backend
 - [ ] Thumbnail replacement from storyboards with frame-selection settings
-- [ ] Options page: backend picker, tone/style sliders, cache controls, per-channel allowlist
+- [ ] Options page: backend picker, tone/style sliders, stamp visibility toggles, cache controls, per-channel allowlist
 - [ ] Finalize WebExtensions API compatibility (Firefox-first, Chrome-compatible)
 
 ## Contributing

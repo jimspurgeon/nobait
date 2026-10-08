@@ -23,8 +23,11 @@ done right.
 ## Project overview
 
 nobait is a browser extension that replaces clickbait YouTube titles with
-AI-generated, factual alternatives, and swaps thumbnails with actual video
-frames from storyboards. It is **Firefox-first**; Chrome/Chromium builds are a
+AI-generated, factual alternatives, swaps thumbnails with actual video frames
+from storyboards, and adds unambiguous **credibility stamps** (✓ green
+legitimate, ⚠ yellow exaggerated, ✗ red misleading, 🎣 orange clickbait,
+☠️ dark-red fake, ? gray unsure) so users can see at a glance whether a video
+is worth watching. It is **Firefox-first**; Chrome/Chromium builds are a
 secondary target.
 
 Key design principles:
@@ -60,7 +63,12 @@ src/
 │   ├── chromeprompt.ts   # Chrome built-in AI (optional)
 │   ├── gemini.ts         # Google AI Studio (BYO key)
 │   ├── ollama.ts         # Local Ollama/server endpoint
-│   └── factory.ts        # Provider selection & fallback
+│   ├── factory.ts        # Provider selection & fallback
+│   └── classify.ts       # Credibility classification prompt & parsing
+├── stamps/           # Credibility stamp system
+│   ├── types.ts      # StampTier enum & interfaces
+│   ├── badges.ts     # Badge rendering (SVG icons, colors)
+│   └── tooltips.ts   # Hover explanations
 ├── storage/          # IndexedDB abstraction
 │   └── cache.ts
 ├── thumbnail/        # Frame selection & rendering
@@ -81,12 +89,14 @@ src/
 │   └── index.d.ts
 └── __tests__/        # Unit tests (Vitest)
     ├── ai/
+    ├── stamps/
     ├── thumbnail/
     └── utils/
 public/               # Static assets (icons, etc.)
 ├── icons/
 │   ├── 48.png
 │   └── 96.png
+├── stamp-icons/      # SVG assets for each stamp tier
 ├── storyboards/      # (optional) test fixtures
 └── transcripts/      # (optional) test fixtures
 vite.config.ts
@@ -169,16 +179,56 @@ export interface AIProvider {
   readonly name: string;
   readonly supportsStreaming: boolean;
 
-  generateTitle(input: {
+  analyze(input: {
     title: string;
     description?: string;
     transcript?: string;
     chapters?: Array<{ startMs: number; title: string }>;
-  }): Promise<string>;
+  }): Promise<{
+    rewrittenTitle: string;
+    stamp: StampTier;
+    stampExplanation: string; // 1-2 sentences: why this rating
+  }>;
 
   close?(): void; // Cleanup on shutdown
 }
 ```
+
+### Credibility stamps
+
+The stamp classification is produced by the same `analyze()` call as title
+rewriting — one prompt, one round trip. `StampTier` is a closed enum (never
+free-form):
+
+```typescript
+// src/stamps/types.ts
+export enum StampTier {
+  LEGITIMATE = 'legitimate', // ✓ green  — accurate, honest, matches content
+  EXAGGERATED = 'exaggerated', // ⚠ yellow — true but overstated/sensationalized
+  MISLEADING = 'misleading', // ✗ red    — title implies something false
+  CLICKBAIT = 'clickbait',   // 🎣 orange — withholding, manufactured curiosity
+  FAKE = 'fake',             // ☠️ dark red — fabricated premise/debunked
+  UNSURE = 'unsure',         // ? gray   — insufficient signal data
+}
+```
+
+Rules for the classification prompt (see `src/ai/classify.ts`):
+
+- The AI must output **exactly one** tier from the enum plus a one-sentence
+  explanation. Parse strictly; fall back to `UNSURE` on any ambiguity.
+- Ratings must be grounded in evidence from the transcript/description —
+  never punish a title merely for being popular.
+- The stamp applies to the video's **original framing**, not the rewritten
+  title.
+
+Stamp rendering (`src/stamps/badges.ts`):
+
+- Inline SVG icons colored by tier, injected next to titles via
+  `src/content/stamps.ts`. No external images, no font dependency.
+- Colors must meet WCAG AA contrast against YouTube's light and dark themes.
+- Hover tooltip shows `stampExplanation` (pure CSS/JS tooltip, no framework).
+- Icons must convey meaning by shape alone (color-blind safe): distinct
+  glyphs per tier, never color-only differentiation.
 
 Each implementation must:
 
@@ -265,6 +315,7 @@ Located in `src/options/`. Features:
 - AI backend selector (dropdown).
 - For key-based backends: API key input (saved encrypted in `browser.storage.local`).
 - Frame position configuration (start/middle/end/random/percentage slider).
+- Stamp settings: visibility toggle, placement, icon-set alternatives.
 - Cache TTL (minutes/hours/days).
 - Per-channel allowlist/blocklist.
 - Reset cache button.
@@ -288,6 +339,8 @@ Use `vitest` with `jsdom` for DOM simulation.
 - Assert:
   - Titles are rewritten within 2 seconds.
   - Thumbnails are replaced with frames.
+  - Stamps appear near titles with the correct tier from a mocked AI response.
+  - Stamp tooltips show the explanation text.
   - Cache prevents duplicate AI calls.
   - Options persist across restarts.
 
