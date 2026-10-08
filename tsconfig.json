@@ -4,18 +4,26 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["@types/chrome"],
+    "types": ["webextension-polyfill", "@types/chrome"],
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
+    "noImplicitReturns": true,
     "forceConsistentCasingInFileNames": true,
     "useDefineForClassFields": true,
     "esModuleInterop": true,
     "isolatedModules": true,
     "skipLibCheck": true,
-    "noEmit": true
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    }
   },
-  "include": ["src", "build.config.mjs", "scripts"]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
 }

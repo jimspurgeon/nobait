@@ -1,44 +1,45 @@
 {
   "name": "nobait",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "Replaces clickbait YouTube titles with factual alternatives, swaps thumbnails with real video frames, and adds credibility stamps.",
-  "private": true,
   "type": "module",
-  "license": "GPL-3.0-or-later",
+  "license": "AGPL-3.0",
+  "private": true,
   "scripts": {
-    "dev:firefox": "node build.config.mjs --minify=false",
-    "dev:chrome": "echo 'Chrome build arrives in a later phase'",
-    "build:firefox": "node build.config.mjs --minify=true",
-    "build:chrome": "echo 'Chrome build arrives in a later phase'",
-    "lint": "eslint . && prettier --check .",
-    "lint:fix": "eslint . --fix && prettier --write .",
-    "typecheck": "tsc --noEmit",
+    "dev:firefox": "vite build --watch --mode development",
+    "dev:chrome": "VITE_TARGET=chrome vite build --watch --mode development",
+    "build:firefox": "VITE_TARGET=firefox vite build",
+    "build:chrome": "VITE_TARGET=chrome vite build",
     "test": "vitest run",
-    "test:e2e": "echo 'E2E tests arrive in a later phase (Playwright, Firefox + Chromium)'"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://example.com/nobait.git"
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "lint": "eslint src --ext .ts,.tsx && prettier --check src",
+    "lint:fix": "eslint src --ext .ts,.tsx --fix && prettier --write src",
+    "typecheck": "tsc --noEmit"
   },
   "engines": {
     "node": ">=18"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.48.0",
     "@types/chrome": "^0.3.4",
     "@types/firefox-webext-browser": "^143.0.1",
     "@types/jsdom": "^30.0.0",
     "@types/node": "^26.6.4",
     "@types/webextension-polyfill": "^0.12.6",
-    "esbuild": "^0.28.2",
-    "eslint": "^10.12.0",
+    "@typescript-eslint/eslint-plugin": "^8.12.0",
+    "@typescript-eslint/parser": "^8.12.0",
+    "eslint": "^8.57.0",
     "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.2.1",
     "jsdom": "^30.1.2",
     "prettier": "^3.9.9",
-    "typescript": "^6.0.3",
-    "typescript-eslint": "^8.71.1",
-    "vite": "^8.3.4",
-    "vitest": "^5.0.3",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.10",
+    "vitest": "^2.1.4"
+  },
+  "dependencies": {
     "webextension-polyfill": "^0.12.0"
   }
 }

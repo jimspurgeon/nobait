@@ -1,23 +1,60 @@
+import { StampTier, VALID_STAMP_TIERS } from '../stamps/types';
+
 /**
- * Credibility classification prompt + strict parsing — placeholder for P3.
- * Must output exactly one StampTier plus a one-sentence explanation; any
- * ambiguity falls back to UNSURE.
+ * Strict enum parsing utilities for stamp tier validation
  */
 
-import { StampTier } from "../stamps/types";
+/**
+ * Parse a raw string into a StampTier with strict validation.
+ * Any malformed value falls back to UNSURE.
+ */
+export function parseStampTier(raw: unknown): { tier: StampTier; explanation?: string } {
+  if (typeof raw !== 'string') {
+    return {
+      tier: StampTier.UNSURE,
+      explanation: 'Stamp was not a string'
+    };
+  }
 
-export function parseStampResponse(raw: string): {
-  tier: StampTier;
-  explanation: string;
-} {
-  // Strict: exact enum match or UNSURE.
-  const m = raw
-    .trim()
-    .match(/^(legitimate|exaggerated|misleading|clickbait|fake|unsure)\b/i);
-  const matched = m?.[0];
-  const tier = matched
-    ? (matched.toLowerCase() as StampTier)
-    : StampTier.UNSURE;
-  const explanation = matched ? raw.trim().slice(matched.length).trim() : "";
-  return { tier, explanation };
+  const normalized = raw.trim().toLowerCase();
+
+  if (!VALID_STAMP_TIERS.includes(normalized as StampTier)) {
+    return {
+      tier: StampTier.UNSURE,
+      explanation: `Unknown stamp "${raw}" - defaulted to unsure`
+    };
+  }
+
+  return { tier: normalized as StampTier };
+}
+
+/**
+ * Parse a full batch result item with strict validation.
+ * Malformed items fall back to UNSURE with explanation, or null if unusable.
+ */
+export function parseBatchItem(raw: unknown): {
+  videoId: string;
+  rewrittenTitle: string;
+  stamp: StampTier;
+  stampExplanation: string;
+} | null {
+  if (!raw || typeof raw !== 'object') return null;
+
+  const obj = raw as Record<string, unknown>;
+
+  if (typeof obj.videoId !== 'string' || obj.videoId.length === 0) return null;
+  if (typeof obj.rewrittenTitle !== 'string' || obj.rewrittenTitle.length === 0) return null;
+
+  const stampParsed = parseStampTier(obj.stamp);
+  const explanation =
+    typeof obj.stampExplanation === 'string' && obj.stampExplanation.length > 0
+      ? obj.stampExplanation
+      : stampParsed.explanation || 'No explanation provided';
+
+  return {
+    videoId: obj.videoId,
+    rewrittenTitle: obj.rewrittenTitle,
+    stamp: stampParsed.tier,
+    stampExplanation: explanation
+  };
 }

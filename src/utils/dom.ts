@@ -23,14 +23,19 @@ export function waitFor(
   tick();
 }
 
-/** Debounce helper used to coalesce rapid DOM-change callbacks. */
-export function debounce<A extends unknown[]>(
-  fn: (...args: A) => void,
-  ms: number,
-) {
-  let t: ReturnType<typeof setTimeout> | undefined;
-  return (...args: A) => {
-    if (t !== undefined) clearTimeout(t);
-    t = setTimeout(() => fn(...args), ms);
+/**
+ * Debounce utility for batching DOM observations.
+ */
+export function debounce<F extends (...args: never[]) => void>(
+  fn: F,
+  waitMs: number,
+): (...args: Parameters<F>) => void {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  return (...args: Parameters<F>) => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => {
+      timer = null;
+      fn(...args);
+    }, waitMs);
   };
 }

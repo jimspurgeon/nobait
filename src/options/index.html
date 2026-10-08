@@ -1,19 +1,45 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>nobait options</title>
-    <link rel="stylesheet" href="styles.css" />
-  </head>
-  <body>
-    <main>
-      <h1>nobait</h1>
-      <p>
-        Settings arrive in a later phase (backend selector, frame position,
-        stamps, cache).
-      </p>
-    </main>
-    <script type="module" src="index.js"></script>
-  </body>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>nobait — Options</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="container">
+    <!-- AI Backend section -->
+    <section class="card">
+      <h2>AI Backend</h2>
+      <div class="field">
+        <label for="backend">Provider</label>
+        <select id="backend" name="backend">
+          <option value="gemini" selected>Gemini (Google AI Studio)</option>
+          <option value="ollama">Ollama / Local server</option>
+        </select>
+        <p class="hint">Uses the free tier of Google AI Studio (gemini-2.5-flash-lite).</p>
+      </div>
+      <div class="field">
+        <label for="api-key">Gemini API key</label>
+        <input type="password" id="api-key" name="api-key" placeholder="Paste your API key here" autocomplete="off">
+        <p class="hint">Stored locally in browser.storage.local, encrypted at rest by the browser. Never sent anywhere except generativelanguage.googleapis.com.</p>
+      </div>
+      <div class="actions">
+        <button id="save-key" class="btn primary">Save API Key</button>
+        <span id="key-status" class="status"></span>
+      </div>
+    </section>
+
+    <!-- Cache section -->
+    <section class="card">
+      <h2>Cache</h2>
+      <p class="hint">Analyses are cached in IndexedDB for 7 days. Negative entries (videos with no usable result) expire after 24 hours.</p>
+      <div class="actions">
+        <button id="clear-cache" class="btn danger">Clear Cache</button>
+        <span id="cache-status" class="status"></span>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="./index.ts"></script>
+</body>
 </html>
