@@ -1,19 +1,35 @@
 /**
- * nobait — Signal extraction (titles, descriptions, transcripts).
+ * Video signal extraction — the inputs handed to AI providers.
  *
- * P1 placeholder: the interface the content script will use to collect
- * signals for the AI backends arriving in P3.
+ * This module is deliberately pure data-shaping (no DOM access): the content
+ * script fills {@link VideoSignal} descriptors, the background scheduler
+ * enriches them with transcript/description/chapters, and providers consume
+ * them. Keeping it data-only makes it trivially testable and lets the same
+ * types flow through the message protocol untouched.
  */
 
-export interface VideoSignals {
-  videoId: string;
+/** A chapter marker from the video description or player timeline. */
+export interface Chapter {
+  startMs: number;
   title: string;
-  description?: string;
-  transcript?: string;
-  chapters?: Array<{ startMs: number; title: string }>;
 }
 
-export async function collectSignals(videoId: string): Promise<VideoSignals> {
-  // TODO(P3): fetch description/chapters/transcript via InnerTube.
-  return { videoId, title: "" };
+/**
+ * All evidence gathered for a single video. Every field except `videoId`
+ * and `title` is optional — signals that miss their deadline are dropped
+ * and the AI evaluates with whatever arrived (PLAN.md §3, Stage 2).
+ */
+export interface VideoSignal {
+  /** YouTube video ID (11 chars). Primary dedupe/cache key. */
+  videoId: string;
+  /** The original (possibly clickbait) title, verbatim. */
+  title: string;
+  /** Video description snippet (truncated upstream, already sanitized). */
+  description?: string;
+  /** Auto or manual transcript text, trimmed to a token budget upstream. */
+  transcript?: string;
+  /** Chapter markers, if the video has them. */
+  chapters?: readonly Chapter[];
+  /** Channel display name (helps anchor news/educational context). */
+  channel?: string;
 }
