@@ -6,6 +6,8 @@ const target = process.env.VITE_TARGET || 'firefox';
 
 export default defineConfig(({ mode }) => ({
   build: {
+    // Firefox-first: MV3 content scripts target modern Gecko (ES2022).
+    target: 'firefox115',
     rollupOptions: {
       input: {
         background: resolve(__dirname, 'src/background/index.ts'),
@@ -21,7 +23,7 @@ export default defineConfig(({ mode }) => ({
     sourcemap: mode === 'development',
     minify: mode === 'production',
     outDir: `dist/${target}`,
-    // Emit a content.css for the content script (manifest references it).
+    emptyOutDir: true,
     cssCodeSplit: true,
     closeBundle() {
       // src/manifest.json is canonical — place it at the dist root.
@@ -33,6 +35,9 @@ export default defineConfig(({ mode }) => ({
     alias: {
       '@': resolve(__dirname, 'src')
     }
+  },
+  server: {
+    port: 5175
   },
   define: {
     'process.env.NODE_ENV': JSON.stringify(mode)

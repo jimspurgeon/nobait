@@ -12,7 +12,8 @@
     "types": [
       "webextension-polyfill",
       "@types/chrome",
-      "vitest/globals"
+      "vitest/globals",
+      "vite/client"
     ],
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
@@ -36,7 +37,8 @@
     }
   },
   "include": [
-    "src/**/*"
+    "src",
+    "demo"
   ],
   "exclude": [
     "node_modules",

@@ -221,3 +221,4 @@ function applyStamp(host: HTMLElement, result: { stamp: StampTier; stampExplanat
 }
 
 void main();
+
