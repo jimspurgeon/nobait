@@ -10,6 +10,19 @@
     "96": "icons/96.png"
   },
 
+  "permissions": ["storage", "unlimitedStorage"],
+  "host_permissions": [
+    "*://*.youtube.com/*",
+    "*://*.ytimg.com/*",
+    "https://generativelanguage.googleapis.com/*"
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "nobait@nobait.example",
+      "strict_min_version": "115.0"
+    }
+  },
+
   "background": {
     "scripts": ["background.js"]
   },
@@ -17,25 +30,14 @@
     {
       "matches": ["*://*.youtube.com/*"],
       "js": ["content.js"],
-      "run_at": "document_start"
+      "css": ["content.css"],
+      "run_at": "document_start",
+      "all_frames": false
     }
   ],
 
   "options_ui": {
     "page": "assets/options.html",
     "open_in_tab": true
-  },
-  "permissions": ["storage", "unlimitedStorage"],
-  "host_permissions": [
-    "*://*.youtube.com/*",
-    "https://generativelanguage.googleapis.com/*",
-    "https://i*.ytimg.com/*"
-  ],
-  "browser_specific_settings": {
-    "gecko": {
-      "id": "nobait@nobait.example",
-      "strict_min_version": "109.0"
-    }
   }
 }
-

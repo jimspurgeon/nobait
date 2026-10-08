@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import { resolve } from 'path';
+import { cpSync } from 'node:fs';
 
 const target = process.env.VITE_TARGET || 'firefox';
 
@@ -19,7 +20,14 @@ export default defineConfig(({ mode }) => ({
     },
     sourcemap: mode === 'development',
     minify: mode === 'production',
-    outDir: `dist/${target}`
+    outDir: `dist/${target}`,
+    // Emit a content.css for the content script (manifest references it).
+    cssCodeSplit: true,
+    closeBundle() {
+      // src/manifest.json is canonical — place it at the dist root.
+      cpSync(resolve(__dirname, 'src/manifest.json'), resolve(__dirname, `dist/${target}/manifest.json`));
+      cpSync(resolve(__dirname, 'src/styles/base.css'), resolve(__dirname, `dist/${target}/content.css`));
+    }
   },
   resolve: {
     alias: {
@@ -28,10 +36,5 @@ export default defineConfig(({ mode }) => ({
   },
   define: {
     'process.env.NODE_ENV': JSON.stringify(mode)
-  },
-  test: {
-    globals: true,
-    environment: 'jsdom',
-    include: ['src/__tests__/**/*.test.ts']
   }
 }));

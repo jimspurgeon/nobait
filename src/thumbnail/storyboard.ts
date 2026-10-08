@@ -1,152 +1,216 @@
 /**
- * YouTube storyboard spec parser
- * Extracts actual frames from YouTube's sprite sheets
+ * Parses YouTube storyboard specifications.
+ *
+ * `player_response.storyboards.playerStoryboardSpecRenderer.spec` is a
+ * pipe-separated line whose first field is a URL template:
+ *
+ *   https://i9.ytimg.com/sb/<ID>/storyboard3_L$L/$N.jpg?...&sigh=$sigh$
+ *
+ * followed by one `#`-separated descriptor per level:
+ *
+ *   <frameWidth>#<frameHeight>#<intervalMs>#<cols>#<rows>#<?>#<?>#<name>#<sigh>
+ *
+ * `$L$` substitutes the level index, `$N$` the sheet index encoded as
+ * `M<sheet>` (older templates use `$M$` for the bare sheet index), and
+ * `$sigh$` the per-level signature.
+ *
+ * Levels are ordered L0 (tiny mosaic, most sheets) → higher (larger tiles).
  */
 
-export interface StoryboardSpec {
-  urlTemplate: string;
+export interface StoryboardLevel {
+  /** L<N> level — higher means larger tiles / fewer sprite sheets. */
+  level: number;
+  /** Base URL template containing `$L$`, `$N$`/`$M$` and `$sigh$`. */
+  baseUrl: string;
+  /** Columns in every sprite sheet of this level. */
+  columns: number;
+  /** Rows in every sprite sheet of this level. */
+  rows: number;
+  /** Frames held by one sprite sheet (columns × rows). */
+  framesPerSheet: number;
+  /** Storyboard sampling interval (ms per frame). */
+  intervalMs: number;
+  /** Width of a single frame (px). */
   width: number;
+  /** Height of a single frame (px). */
   height: number;
-  tileCount: number;
-  framesPerTile: number;
+  /** Per-level signature for the URL template, when present. */
+  sigh: string | null;
+  /**
+   * Total frames covered by the storyboard — `ceil(duration / interval)`
+   * when the video duration is known; otherwise conservatively
+   * `framesPerSheet`.
+   */
   totalFrames: number;
-  sig: string;
 }
 
-export interface FramePosition {
-  videoId: string;
-  timestampMs: number;
-  /** Computed frame index within the storyboard */
-  frameIndex?: number;
+export interface PlayerStoryboardSpec {
+  levels: StoryboardLevel[];
+  durationMs: number;
+}
+
+function toNum(raw: string | undefined): number {
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : NaN;
 }
 
 /**
- * Parse storyboard spec from player_response.storyboards
+ * Parse the pipe-separated spec line. `videoDurationMs` (from
+ * `videoDetails.lengthSeconds`) turns interval-based levels into absolute
+ * frame counts; without it we fall back to one-sheet totals, which still
+ * yields valid (if coarse) positions.
  */
-export function parseStoryboardSpec(data: unknown): StoryboardSpec | null {
-  if (!data || typeof data !== 'object') return null;
-  const obj = data as Record<string, unknown>;
-  const arrays = obj.storyboards as any[] | undefined;
-  if (!arrays || arrays.length === 0) return null;
+export function parseSpecString(spec: string, videoDurationMs = 0): PlayerStoryboardSpec {
+  const parts = spec.split('|');
+  if (parts.length < 2) throw new Error('nobait/storyboard: malformed spec (too few fields)');
 
-  const first = arrays[0];
-  if (typeof first !== 'object') return null;
-  const spec = first as Record<string, unknown>;
+  const baseUrl = parts[0];
+  if (!/^https?:\/\//.test(baseUrl)) {
+    throw new Error('nobait/storyboard: spec URL template missing');
+  }
 
-  const urlTemplate = spec.storyboard_URL_template as string;
-  const width = spec.width as number;
-  const height = spec.height as number;
-  const tileCount = spec.tile_count as number;
-  const frameCount = spec.frame_count as number;
+  const levels: StoryboardLevel[] = [];
+  for (let i = 1; i < parts.length; i++) {
+    const f = parts[i].split('#');
+    if (f.length < 5) continue;
 
-  if (!urlTemplate || !width || !height) return null;
+    const width = toNum(f[0]);
+    const height = toNum(f[1]);
+    const intervalMs = toNum(f[2]);
+    const columns = toNum(f[3]);
+    const rows = toNum(f[4]);
+    const sigh = f.length >= 9 && f[8] ? f[8] : null;
+    if (!(width > 0 && height > 0 && intervalMs > 0 && columns > 0 && rows > 0)) continue;
 
-  return {
-    urlTemplate: urlTemplate.replace('$W', String(width)).replace('$H', String(height)),
-    width,
-    height,
-    tileCount,
-    framesPerTile: Math.floor(frameCount / tileCount),
-    totalFrames: frameCount,
-    sig: extractSignature(urlTemplate)
+    const framesPerSheet = columns * rows;
+    const totalFrames =
+      videoDurationMs > 0
+        ? Math.max(1, Math.ceil(videoDurationMs / intervalMs))
+        : framesPerSheet;
+
+    levels.push({
+      level: i - 1,
+      baseUrl,
+      columns,
+      rows,
+      framesPerSheet,
+      intervalMs,
+      width,
+      height,
+      sigh,
+      totalFrames,
+    });
+  }
+
+  if (levels.length === 0) {
+    throw new Error('nobait/storyboard: no usable levels in spec');
+  }
+  return { levels, durationMs: videoDurationMs };
+}
+
+/** Convert a URL template to a fetchable sheet URL. */
+export function buildSheetUrl(level: StoryboardLevel, sheet: number): string {
+  return level.baseUrl
+    .replace(/\$L\$/g, String(level.level))
+    .replace(/\$N\$/g, `M${sheet}`)
+    .replace(/\$M\$/g, String(sheet))
+    .replace(/\$sigh\$/g, level.sigh ?? '');
+}
+
+interface RawPlayerResponse {
+  storyboards?: {
+    playerStoryboardSpecRenderer?: { spec?: string };
+    playerLiveStoryboardSpecRenderer?: { spec?: string };
   };
+  videoDetails?: { lengthSeconds?: string | number };
+}
+
+function isValidLevel(l: unknown): l is StoryboardLevel {
+  if (!l || typeof l !== 'object') return false;
+  const v = l as Record<string, unknown>;
+  return (
+    typeof v.baseUrl === 'string' &&
+    typeof v.columns === 'number' &&
+    typeof v.rows === 'number' &&
+    typeof v.framesPerSheet === 'number' &&
+    typeof v.width === 'number' &&
+    typeof v.height === 'number' &&
+    typeof v.totalFrames === 'number'
+  );
 }
 
 /**
- * Extract signature from storyboard URL template
+ * Accept anything reasonable and normalize to a PlayerStoryboardSpec.
+ * Handles: our own cached normalized spec (round-trips through IndexedDB),
+ * a raw `player_response` object, or a raw spec string. Returns null when
+ * nothing parseable is found — callers degrade gracefully.
  */
-function extractSignature(template: string): string {
-  const match = template.match(/[?&]sigh=([^&]+)/);
-  return match?.[1] ?? '';
-}
+export function parseStoryboardSpec(input: unknown): PlayerStoryboardSpec | null {
+  if (!input) return null;
+  if (typeof input === 'string') {
+    try {
+      return parseSpecString(input);
+    } catch {
+      return null;
+    }
+  }
+  if (typeof input !== 'object') return null;
 
-/**
- * Calculate which sprite tile contains a given timestamp
- */
-export function calculateFrame(spec: StoryboardSpec, timestampMs: number): FramePosition {
-  const { frameIndex } = calculateIndices(spec, timestampMs);
-  const durationMs = (spec.totalFrames / 30) * 1000;
-  const clampedTimestamp = Math.max(0, Math.min(timestampMs, durationMs));
+  const obj = input as Record<string, unknown>;
 
-  return {
-    videoId: '',
-    timestampMs: Math.floor(clampedTimestamp),
-    frameIndex
-  } as FramePosition;
-}
-
-/**
- * Fetch and crop a frame from storyboard sprite.
- * Deterministic given (spec, timestampMs): the same inputs always produce
- * the same frame, so the same thumbnail appears consistently across sessions.
- */
-export async function fetchFrame(spec: StoryboardSpec, timestampMs: number): Promise<Blob | null> {
-  const { frameIndex } = calculateIndices(spec, timestampMs);
-  const tileIndex = Math.floor(frameIndex / spec.framesPerTile);
-  const frameInTile = frameIndex % spec.framesPerTile;
-
-  const url = spec.urlTemplate
-    .replace('<L>', `L${tileIndex}`)
-    .replace('<M>', String(tileIndex))
-    .replace('&sigh=<SIG>', `&sigh=${spec.sig}`);
-
-  try {
-    const response = await fetch(url);
-    if (!response.ok) return null;
-
-    const blob = await response.blob();
-    return await cropFrame(blob, spec, frameInTile);
-  } catch {
+  // Already-normalized spec.
+  if (Array.isArray(obj.levels) && obj.levels.length > 0) {
+    const levels = obj.levels as unknown[];
+    if (levels.every(isValidLevel)) {
+      return {
+        levels: levels as StoryboardLevel[],
+        durationMs: typeof obj.durationMs === 'number' ? obj.durationMs : (levels[0] as StoryboardLevel).totalFrames > 0 ? (levels[0] as StoryboardLevel).intervalMs * (levels[0] as StoryboardLevel).totalFrames : 0,
+      };
+    }
     return null;
   }
-}
 
-/**
- * Compute frame + tile indices for a timestamp
- */
-function calculateIndices(spec: StoryboardSpec, timestampMs: number): { frameIndex: number } {
-  const durationMs = (spec.totalFrames / 30) * 1000; // ~30fps storyboards
-  const clamped = Math.max(0, Math.min(timestampMs, durationMs));
-  const frameIndex = Math.floor((clamped / durationMs) * spec.totalFrames);
-  return { frameIndex };
-}
-
-/**
- * Crop a single frame from a sprite sheet
- */
-function cropFrame(spriteBlob: Blob, spec: StoryboardSpec, frameIndex: number): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const url = URL.createObjectURL(spriteBlob);
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = spec.width;
-      canvas.height = spec.height;
-
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        URL.revokeObjectURL(url);
-        reject(new Error('Cannot get canvas context'));
-        return;
+  // Raw player_response shape.
+  const raw = obj as RawPlayerResponse;
+  if (raw.storyboards) {
+    const specStr =
+      raw.storyboards.playerStoryboardSpecRenderer?.spec ??
+      raw.storyboards.playerLiveStoryboardSpecRenderer?.spec;
+    const lengthSec = Number(raw.videoDetails?.lengthSeconds ?? 0);
+    const durationMs = Number.isFinite(lengthSec) && lengthSec > 0 ? lengthSec * 1000 : 0;
+    if (typeof specStr === 'string') {
+      try {
+        return parseSpecString(specStr, durationMs);
+      } catch {
+        return null;
       }
+    }
+    return null;
+  }
 
-      const cols = 5; // Typically 5 tiles per row
-      const tileWidth = spec.width;
-      const tileHeight = spec.height;
-      const x = (frameIndex % cols) * tileWidth;
-      const y = Math.floor(frameIndex / cols) * tileHeight;
+  return null;
+}
 
-      ctx.drawImage(img, x, y, tileWidth, tileHeight, 0, 0, tileWidth, tileHeight);
-      URL.revokeObjectURL(url);
+/**
+ * Extract the storyboard spec for one video from raw `player_response`
+ * JSON (fetched from the InnerTube API by the caller).
+ */
+export function specFromPlayerResponse(playerResponse: unknown): PlayerStoryboardSpec | null {
+  return parseStoryboardSpec(playerResponse);
+}
 
-      canvas.toBlob((blob) => {
-        resolve(blob || new Blob());
-      }, 'image/jpeg', 0.8);
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error('Failed to load sprite image'));
-    };
-    img.src = url;
-  });
+/**
+ * Pick the level whose frames are just big enough for `minWidth` (sprite
+ * files grow quadratically with level). Falls back to the largest level
+ * when none is wide enough.
+ */
+export function selectLevel(spec: PlayerStoryboardSpec, minWidth: number): StoryboardLevel {
+  let best: StoryboardLevel | null = null;
+  for (const l of spec.levels) {
+    if (l.width >= minWidth && (!best || l.width < best.width)) best = l;
+  }
+  if (!best) {
+    best = [...spec.levels].sort((a, b) => b.width * b.height - a.width * a.height)[0];
+  }
+  return best;
 }

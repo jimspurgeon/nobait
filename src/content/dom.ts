@@ -1,85 +1,53 @@
-import { extractVideoId } from "../utils/url";
+/**
+ * Centralized YouTube DOM selectors (PLAN: "if YouTube changes classes,
+ * we fix one file"). Unifies the P2 thumbnail-card extraction with the P3
+ * signal-extraction selectors used by the stamp pipeline.
+ */
+
+import { extractVideoId } from '../utils/url';
 
 // Re-exported for content-script callers that import from ./dom (P3 shape).
 export { extractVideoId };
 
-/**
- * YouTube-specific DOM selectors - centralized here so YouTube changes
- * only require fixing one file
- */
 export const SELECTORS = {
-  /** Video title on home/search/sidebar cards */
-  TITLE: '#video-title, ytd-rich-item-renderer #video-title, ytd-video-renderer #video-title',
-  /** Thumbnail image on cards */
-  THUMBNAIL: 'ytd-thumbnail #img, ytd-thumbnail img',
-  /** Video description on watch page */
-  DESCRIPTION: '#description-inline-expander',
-  /** Compact video renderer link (sidebar) */
-  COMPACT_LINK: 'ytd-compact-video-renderer #video-title',
-  /** Lockup viewmodel-based grid item (new YouTube) */
-  LOCKUP: 'ytd-lockup-view-model, .ytLockupViewModelHost',
-  /** Channel name on cards */
-  CHANNEL: '#channel-name #text, .yt-content-secondary-view-model__text',
-  /** Watch page title */
-  WATCH_TITLE: 'h1.ytd-watch-metadata title, h1.ytd-watch-metadata',
-  /** Links to watch pages — the most reliable video-ID carrier anywhere. */
-  WATCH_LINK: 'a[href*="/watch?v="][href]',
-  /** Compact grid/list cards (home, search results, sidebar). */
-  VIDEO_RENDERER:
-    "ytd-video-renderer, ytd-rich-grid-media, ytd-compact-video-renderer, ytd-grid-video-renderer",
-  /** Currently-playing video element (watch page). */
-  PLAYER: "#movie_player video, video.html5-main-video",
-  /** Canonical anchor on watch pages. */
-  CANONICAL: 'link[rel="canonical"]',
+  /** Grid / list items hosting a video card (P2 thumbnail pipeline). */
+  GRID_ITEM: 'ytd-rich-item-renderer, ytd-video-renderer, ytd-compact-video-renderer',
+  /** Thumbnail anchor inside a card. */
+  THUMBNAIL_LINK: 'a#thumbnail.yt-simple-endpoint, a#thumbnail',
+  /** Thumbnail image inside a card. */
+  THUMBNAIL_IMG: 'ytd-thumbnail img, ytd-thumbnail #img, img#img',
+  /** Video titles on cards (P3 stamp pipeline). */
+  TITLE: '#video-title, ytd-rich-item-renderer #video-title, ytd-video-renderer #video-title, #text.ytd-video-renderer',
+  /** Watch-page description (P3 signal extraction). */
+  WATCH_LINK: 'a[href*="/watch"]',
 } as const;
 
-/** A detected video. Lightweight descriptor only — no element refs held. */
-export interface VideoHit {
+export interface VideoCard {
   videoId: string;
-  /** Where the hit was found, for debugging and later prioritization. */
-  source: "link" | "url";
+  /** The primary thumbnail <img> (may be lazily upgraded by YouTube). */
+  img: HTMLImageElement | null;
+  /** Element that marks a swap as already-done (idempotency). */
+  containerEl: Element;
 }
 
-/**
- * Find the closest ancestor element with the given attribute
- */
-export function closestWithAttribute(el: Element, attr: string): Element | null {
-  let current: Element | null = el;
-  while (current) {
-    if (current.hasAttribute(attr)) {
-      return current;
-    }
-    current = current.parentElement;
+/** Parse an 11-char video ID from any YouTube watch/shorts/embed URL. */
+export function videoIdFromUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const m =
+    /[?&]v=([\w-]{11})/.exec(url) ?? /\/(?:shorts|embed)\/([\w-]{11})/.exec(url);
+  return m ? m[1] : null;
+}
+
+/** Extract a video card from a grid item element, null when unusable. */
+export function extractCard(el: Element): VideoCard | null {
+  const link = el.querySelector(SELECTORS.THUMBNAIL_LINK) as HTMLAnchorElement | null;
+  const id = videoIdFromUrl(link?.getAttribute('href') ?? link?.href);
+  if (!id) return null;
+  let img = el.querySelector(SELECTORS.THUMBNAIL_IMG) as HTMLImageElement | null;
+  // YouTube sometimes hides the real <img> behind a bg-image div.
+  if (!img) {
+    const holder = el.querySelector('yt-img-shadow, .yt-thumb, #thumbnail-container');
+    img = holder?.querySelector('img') ?? null;
   }
-  return null;
-}
-
-/**
- * Collect video IDs currently present in the DOM, de-duplicated, in DOM
- * order. Callers run this after mutations or navigations; it is cheap
- * (querySelectorAll over link selectors only).
- */
-export function findVideoHits(root: ParentNode = document): VideoHit[] {
-  const seen = new Set<string>();
-  const hits: VideoHit[] = [];
-
-  const push = (videoId: string, source: VideoHit["source"]) => {
-    if (!seen.has(videoId)) {
-      seen.add(videoId);
-      hits.push({ videoId, source });
-    }
-  };
-
-  root.querySelectorAll?.(SELECTORS.WATCH_LINK).forEach((a) => {
-    const id = extractVideoId((a as HTMLAnchorElement).href);
-    if (id) push(id, "link");
-  });
-
-  // Canonical link (watch pages) survives even when links are not rendered.
-  root.querySelectorAll?.(SELECTORS.CANONICAL)?.forEach?.((link) => {
-    const id = extractVideoId((link as HTMLLinkElement).href);
-    if (id) push(id, "link");
-  });
-
-  return hits;
+  return { videoId: id, img, containerEl: el };
 }

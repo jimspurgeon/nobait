@@ -8,7 +8,8 @@ declare const browser: any;
 declare const chrome: any;
 
 /**
- * Background service worker entry point
+ * Background service worker entry point — handles stamp pipeline (P3/P4)
+ * and cache-management messages (P2 thumbnail pipeline coordination).
  */
 class BackgroundWorker {
   private initialized = false;
@@ -74,6 +75,14 @@ class BackgroundWorker {
             .then(() => sendResponse({ success: true }))
             .catch(err => sendResponse({ success: false, error: String(err) }));
           return true;
+
+        case 'nobait:clear-thumb-cache': {
+          void this.clearThumbCaches().then(() => {
+            // P2 style reply (service-worker postMessage)
+          });
+          sendResponse({ success: true });
+          return true;
+        }
 
         default:
           console.warn('[nobait] Unknown message type:', message.type);
@@ -178,6 +187,18 @@ class BackgroundWorker {
       }
     } catch {
       // Tab messaging unavailable - ignore
+    }
+  }
+
+  /**
+   * Clear thumbnail-related IndexedDB databases (P2 pipeline coordination)
+   */
+  private async clearThumbCaches(): Promise<void> {
+    for (const name of ['nobait-thumbnails', 'nobait-sprites']) {
+      await new Promise<void>((resolve) => {
+        const req = indexedDB.deleteDatabase(name);
+        req.onsuccess = req.onerror = req.onblocked = () => resolve();
+      });
     }
   }
 }
