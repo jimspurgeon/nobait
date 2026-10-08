@@ -76,17 +76,17 @@ const RATING_CLUSTERS: ReadonlyArray<{ category: RatingCategory; pattern: RegExp
   {
     category: 'false',
     pattern:
-      /\b(false| Pants ?on ?Fire| debunk(?:ed)?| hoax| fabricat(?:ed|ion)| misinformation| disinformation| pseudoscience| baseless| untrue)\b/i,
+      /\b(false|pants ?on ?fire|debunk(?:ed)?|hoax|fabricat(?:ed|ion)|misinformation|disinformation|pseudoscience|baseless|untrue)\b/i,
   },
   {
     category: 'mixed',
     pattern:
-      /\b(mixed| mixture| half[- ]true| partly (?:true|false)| partially (?:true|false)| mostly false| needs context| missing context| misleading| cherry[- ]picked| unproven| unsubstantiated)\b/i,
+      /\b(mixed|mixture|half[- ]true|partly (?:true|false)|partially (?:true|false)|mostly false|needs context|missing context|misleading|cherry[- ]picked|unproven|unsubstantiated)\b/i,
   },
   {
     category: 'true',
     pattern:
-      /\b(true| accurate| correct| verified| supported| mostly true| largely true| fact[- ]check:? true)\b/i,
+      /\b(true|accurate|correct|verified|supported|mostly true|largely true|fact[- ]check:? true)\b/i,
   },
 ];
 
