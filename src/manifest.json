@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "nobait",
+  "description": "Replaces clickbait YouTube titles with AI-generated, factual alternatives",
+  "version": "0.3.0",
+
+  "icons": {
+    "48": "icons/48.png",
+    "96": "icons/96.png"
+  },
+
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.youtube.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "options_ui": {
+    "page": "assets/options.html",
+    "open_in_tab": true
+  },
+  "permissions": ["storage", "unlimitedStorage"],
+  "host_permissions": [
+    "*://*.youtube.com/*",
+    "https://generativelanguage.googleapis.com/*",
+    "https://i*.ytimg.com/*"
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "nobait@nobait.example",
+      "strict_min_version": "109.0"
+    }
+  }
+}
