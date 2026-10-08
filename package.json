@@ -1,0 +1,17 @@
+{
+  "name": "nobait",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "nobait — Firefox-first extension replacing clickbait YouTube titles and thumbnails with credible alternatives. P6 fact-check layer.",
+  "license": "AGPL-3.0",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
