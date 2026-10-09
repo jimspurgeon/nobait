@@ -195,7 +195,7 @@ export class OllamaProvider implements AIProvider {
       if (cause instanceof TypeError) {
         throw err(
           "network error",
-          `cannot reach ${this.baseUrl} (is the local server running?)`,
+          `cannot reach ${this.baseUrl}. If using a local Ollama server, ensure it is running and that the extension has been granted permission to access http://localhost.`,
         );
       }
       throw cause instanceof Error

@@ -45,6 +45,29 @@ central database.
 > tagged release. Chrome builds (`npm run build:chrome`) are not yet wired
 > up (see Roadmap).
 
+## Zero-config AI setup
+
+nobait tries to find a working AI backend **automatically on first run**:
+
+1. **Ollama autodetect** — if a local [Ollama](https://ollama.com) server is
+   running on `http://localhost:11434`, nobait detects it, picks the best
+   installed model (preferring small, fast ones like `qwen3:0.6b`), and
+   uses it for title rewriting and credibility stamps. Nothing leaves your
+   machine.
+2. **Gemini key wizard** — if no local server is found, the options page
+   shows a setup banner linking to [Google AI Studio](https://aistudio.google.com/apikey)
+   where you can create a **free** API key. Paste it into Settings → AI
+   Backend → Gemini; nobait validates it live before saving.
+
+Until one of these is configured, nobait still fully works for
+**thumbnail replacement** (real video frames via YouTube's public
+storyboard endpoints) — only title rewriting and stamps wait for a backend.
+
+**Tip for Ollama users**: if autodetect finds the server but evaluations
+fail with a network error, open the extension's Settings and enter
+`http://localhost:11434` + your model tag manually — this pins the provider
+so Firefox's host permission approval sticks.
+
 ## Development
 
 ```bash
