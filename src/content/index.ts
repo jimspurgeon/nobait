@@ -12,6 +12,7 @@ import { attachTooltip } from "../stamps/tooltips";
 import { SpatObserver } from "./observer";
 import { ThumbnailSwapper } from "./thumb-swapper";
 import { loadSettings, type NobaitSettings } from "./settings";
+import { escapeDomText } from "./signals";
 import { webext } from "../utils/webext";
 import "../styles/base.css";
 
@@ -84,7 +85,7 @@ async function processTitle(titleEl: HTMLElement): Promise<void> {
   const videoId = extractVideoId(
     href.startsWith("/") ? `https://www.youtube.com${href}` : href,
   );
-  const title = (titleEl.textContent || "").trim();
+  const title = escapeDomText(titleEl.textContent || "");
 
   if (!videoId || !title) return;
 
