@@ -257,6 +257,48 @@ export class CacheDB {
   }
 
   /**
+   * Count entries in both stores (for the options-page cache status).
+   */
+  async counts(): Promise<{ analysisCount: number; negativeCount: number }> {
+    if (!this.db) await this.init();
+
+    const count = (storeName: string): Promise<number> =>
+      new Promise((resolve, reject) => {
+        const tx = this.db!.transaction(storeName, "readonly");
+        const req = tx.objectStore(storeName).count();
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+
+    const [analysisCount, negativeCount] = await Promise.all([
+      count(this.stores.ANALYSIS),
+      count(this.stores.NEGATIVE),
+    ]);
+    return { analysisCount, negativeCount };
+  }
+
+  /**
+   * Delete every entry from both object stores (data-level clear,
+   * unlike close()+init() which only recycles the connection).
+   */
+  async clearAll(): Promise<void> {
+    if (!this.db) await this.init();
+
+    const clearStore = (storeName: string): Promise<void> =>
+      new Promise((resolve, reject) => {
+        const tx = this.db!.transaction(storeName, "readwrite");
+        tx.objectStore(storeName).clear();
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+
+    await Promise.all([
+      clearStore(this.stores.ANALYSIS),
+      clearStore(this.stores.NEGATIVE),
+    ]);
+  }
+
+  /**
    * Close database connection
    */
   close(): void {

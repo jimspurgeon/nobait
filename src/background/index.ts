@@ -5,7 +5,11 @@ import { GeminiProvider } from "../ai/gemini";
 import { AIInput, StampResult } from "../stamps/types";
 import { evaluateFactCheck, StampTier as FactCheckTier } from "./factcheck";
 import { webext } from "../utils/webext";
-import { getSettings, onSettingsChanged, CACHE_TTL_MS } from "../settings/index";
+import {
+  getSettings,
+  onSettingsChanged,
+  CACHE_TTL_MS,
+} from "../settings/index";
 
 // Re-export for the scheduler's TTL computation (avoids a circular import
 // of the settings module shape into scheduler.ts's static constants).
@@ -28,21 +32,14 @@ class BackgroundWorker {
 
     // Initialize AI provider factory from unified settings
     const settings = await getSettings();
-    await aiProviderFactory.initialize({
-      geminiApiKey: settings.ai.geminiApiKey || undefined,
-      ollamaUrl: settings.ai.ollamaUrl || undefined,
-    });
+    await this.applyAiSettings(settings);
 
     // Set up message handler
     this.setupMessageHandler();
 
     // Live settings: re-initialize the provider when AI config changes.
     onSettingsChanged((next) => {
-      void aiProviderFactory.reset();
-      void aiProviderFactory.initialize({
-        geminiApiKey: next.ai.geminiApiKey || undefined,
-        ollamaUrl: next.ai.ollamaUrl || undefined,
-      });
+      void this.applyAiSettings(next);
     });
 
     // Periodic cleanup (hourly)
@@ -138,6 +135,24 @@ class BackgroundWorker {
   }
 
   /**
+   * Feed unified settings into the provider factory. The user's backend
+   * preference (options dropdown) selects the provider chain: a specific
+   * backend pins the factory to it, `auto` follows the default chain.
+   */
+  private async applyAiSettings(
+    settings: Awaited<ReturnType<typeof getSettings>>,
+  ): Promise<void> {
+    await aiProviderFactory.reset();
+    const ai = settings.ai;
+    await aiProviderFactory.initialize({
+      preferredProvider: ai.backend === "auto" ? undefined : ai.backend,
+      geminiApiKey: ai.geminiApiKey || undefined,
+      ollamaUrl: ai.ollamaUrl || undefined,
+      ollamaModel: ai.ollamaModel || undefined,
+    });
+  }
+
+  /**
    * Handle evaluate video request
    */
   private async handleEvaluateVideo(payload: {
@@ -148,7 +163,9 @@ class BackgroundWorker {
     chapters?: Array<{ startMs: number; title: string }>;
   }): Promise<{
     success: boolean;
-    result?: StampResult;
+    result?: StampResult & {
+      timing?: { inferenceMs: number; cached?: boolean };
+    };
     error?: string;
   }> {
     const input: AIInput = {
@@ -167,13 +184,23 @@ class BackgroundWorker {
       FactCheckTier.UNSURE,
     );
 
+    const startedAt = performance.now();
     const result = await scheduler.evaluate(input);
+    const inferenceMs = Math.round(performance.now() - startedAt);
     const factCheck = await factCheckPromise;
 
     if (result && factCheck.result && factCheck.result.changed) {
       result.stamp = factCheck.result.stamp;
     }
-    return { success: true, result: result || undefined };
+    // Timing context for the content script's animation layer (M2):
+    // cached hits animate instantly, live inference scales durations.
+    const timedResult = result
+      ? {
+          ...result,
+          timing: { inferenceMs, cached: inferenceMs < 50 },
+        }
+      : undefined;
+    return { success: true, result: timedResult };
   }
 
   /**
@@ -184,15 +211,20 @@ class BackgroundWorker {
     analysisCount: number;
     negativeCount: number;
   }> {
-    return { success: true, analysisCount: 0, negativeCount: 0 };
+    try {
+      const counts = await cacheDB.counts();
+      return { success: true, ...counts };
+    } catch (err) {
+      console.error("[nobait] Failed to read cache stats:", err);
+      return { success: false, analysisCount: 0, negativeCount: 0 };
+    }
   }
 
   /**
    * Clear all caches
    */
   private async clearCache(): Promise<{ success: boolean }> {
-    await cacheDB.close();
-    await cacheDB.init();
+    await cacheDB.clearAll();
     return { success: true };
   }
 
@@ -214,7 +246,16 @@ class BackgroundWorker {
 
     if (!tabsApi) return;
 
-    const message = { type: "NEW_RESULT", result };
+    // Age of the result drives animation timing: fresh results animate,
+    // anything older than a few seconds came from cache/stream replay.
+    const ageMs = Date.now() - result.timestamp;
+    const message = {
+      type: "NEW_RESULT",
+      result: {
+        ...result,
+        timing: { inferenceMs: ageMs, cached: ageMs < 50 },
+      },
+    };
 
     try {
       const tabs = await tabsApi.query({});

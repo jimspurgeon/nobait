@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "nobait",
-  "version": "0.3.0",
+  "version": "0.1.0",
   "description": "Replaces clickbait YouTube titles with factual alternatives, real video frames, and adds credibility stamps.",
-  "homepage_url": "https://example.com/nobait",
+  "homepage_url": "https://github.com/jimspurgeon/nobait",
 
   "icons": {
     "48": "icons/48.png",

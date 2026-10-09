@@ -27,7 +27,9 @@ interface MockStorageArea {
   _store: Map<string, unknown>;
 }
 
-function makeStorageArea(initial: Record<string, unknown> = {}): MockStorageArea {
+function makeStorageArea(
+  initial: Record<string, unknown> = {},
+): MockStorageArea {
   const store = new Map<string, unknown>(Object.entries(initial));
   const listeners: Array<(changes: unknown, area: string) => void> = [];
   const area: MockStorageArea = {

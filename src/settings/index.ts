@@ -19,7 +19,8 @@ import type { FramePosition } from "../thumbnail/types";
 export const SETTINGS_KEY = "nobait:settings";
 
 /** Where the AI picks a frame from within the video. */
-export type ThumbPositionKind = "start" | "middle" | "end" | "random" | "percent";
+export type ThumbPositionKind =
+  "start" | "middle" | "end" | "random" | "percent";
 
 /** Which AI provider to use. `auto` follows the factory priority chain. */
 export type BackendPreference = "auto" | "chrome" | "gemini" | "ollama";
@@ -374,7 +375,10 @@ export function onSettingsChanged(
   storageArea?: {
     onChanged?: {
       addListener?: (
-        cb: (changes: Record<string, { newValue?: unknown }>, area: string) => void,
+        cb: (
+          changes: Record<string, { newValue?: unknown }>,
+          area: string,
+        ) => void,
       ) => void;
       removeListener?: (cb: (changes: unknown, area: string) => void) => void;
     };

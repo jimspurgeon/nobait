@@ -39,11 +39,7 @@ function el<T extends HTMLElement = HTMLElement>(id: string): T | null {
   return document.getElementById(id) as T | null;
 }
 
-function setStatus(
-  id: string,
-  message: string,
-  isError = false,
-): void {
+function setStatus(id: string, message: string, isError = false): void {
   const status = el(id);
   if (!status) return;
   status.textContent = message;
@@ -80,7 +76,8 @@ async function loadIntoForm(settings: Settings): Promise<void> {
   }
 
   const ollamaUrl = el<HTMLInputElement>("ollama-url");
-  if (ollamaUrl && settings.ai.ollamaUrl) ollamaUrl.value = settings.ai.ollamaUrl;
+  if (ollamaUrl && settings.ai.ollamaUrl)
+    ollamaUrl.value = settings.ai.ollamaUrl;
 
   const ollamaModel = el<HTMLInputElement>("ollama-model");
   if (ollamaModel && settings.ai.ollamaModel) {
@@ -116,7 +113,7 @@ async function loadIntoForm(settings: Settings): Promise<void> {
   if (placement) placement.value = settings.stamps.placement;
 
   document
-    .querySelectorAll<HTMLInputElement>('input[data-tier]')
+    .querySelectorAll<HTMLInputElement>("input[data-tier]")
     .forEach((cb) => {
       const tier = cb.dataset.tier;
       if (tier) cb.checked = settings.stamps.tiers[tier] !== false;
@@ -210,7 +207,7 @@ function collectFormState(): DeepPartialSettings {
 
   const tiers: Record<string, boolean> = {};
   document
-    .querySelectorAll<HTMLInputElement>('input[data-tier]')
+    .querySelectorAll<HTMLInputElement>("input[data-tier]")
     .forEach((cb) => {
       const tier = cb.dataset.tier;
       if (tier) tiers[tier] = cb.checked;
@@ -275,7 +272,10 @@ function renderTagList(kind: "allowlist" | "blocklist", items: string[]): void {
   }
 }
 
-function buildTagChip(kind: "allowlist" | "blocklist", item: string): HTMLElement {
+function buildTagChip(
+  kind: "allowlist" | "blocklist",
+  item: string,
+): HTMLElement {
   const chip = document.createElement("span");
   chip.className = "tag";
   chip.textContent = item;
@@ -353,6 +353,8 @@ function wireEvents(): void {
       const result = (await sendMessage({ type: "CLEAR_CACHE" })) as {
         success?: boolean;
       };
+      // Also clear the thumbnail sprite/frame caches (P2 pipelines).
+      await sendMessage({ type: "nobait:clear-thumb-cache" });
       if (result && result.success === false) {
         setStatus("cache-status", "Failed to clear cache.", true);
       } else {
@@ -430,7 +432,7 @@ function wireEvents(): void {
   });
 
   document
-    .querySelectorAll<HTMLInputElement>('input[data-tier]')
+    .querySelectorAll<HTMLInputElement>("input[data-tier]")
     .forEach((cb) => {
       cb.addEventListener("change", () => {
         void saveSettings({ stamps: collectFormState().stamps });
@@ -486,6 +488,26 @@ async function init(): Promise<void> {
   await loadIntoForm(settings);
   wireEvents();
   await updateProviderBadge();
+  await refreshCacheStatus();
+}
+
+/** Fetch real cache counts from the background worker (M5 fix). */
+async function refreshCacheStatus(): Promise<void> {
+  try {
+    const status = (await sendMessage({ type: "GET_CACHE_STATUS" })) as {
+      success?: boolean;
+      analysisCount?: number;
+      negativeCount?: number;
+    } | null;
+    if (status && status.success) {
+      setStatus(
+        "cache-status",
+        `${status.analysisCount ?? 0} analyses, ${status.negativeCount ?? 0} negative entries cached.`,
+      );
+    }
+  } catch {
+    // Background unavailable (e.g. opened standalone) — leave status blank.
+  }
 }
 
 init().catch(console.error);

@@ -16,7 +16,9 @@
         <div class="field">
           <label for="backend">Provider</label>
           <select id="backend" name="backend">
-            <option value="auto" selected>Auto (Chrome → Gemini → Ollama)</option>
+            <option value="auto" selected>
+              Auto (Chrome → Gemini → Ollama)
+            </option>
             <option value="chrome">Chrome built-in AI (Gemini Nano)</option>
             <option value="gemini">Gemini (Google AI Studio)</option>
             <option value="ollama">Ollama / Local server</option>
@@ -116,7 +118,9 @@
         <h2>Credibility Stamps</h2>
 
         <div class="field">
-          <label><input type="checkbox" id="stamps-visible" /> Show stamps</label>
+          <label
+            ><input type="checkbox" id="stamps-visible" /> Show stamps</label
+          >
           <p class="hint">
             When enabled, badges appear next to video titles indicating whether
             the content is legitimate, exaggerated, misleading, etc.
@@ -136,8 +140,8 @@
           <legend>Enable per tier</legend>
           <div class="tier-row">
             <label
-              ><input type="checkbox" data-tier="legitimate" checked /> Legitimate
-              (✓)</label
+              ><input type="checkbox" data-tier="legitimate" checked />
+              Legitimate (✓)</label
             >
             <label
               ><input type="checkbox" data-tier="exaggerated" checked />
@@ -163,7 +167,9 @@
         </fieldset>
 
         <div class="actions">
-          <button id="save-stamps" class="btn primary">Save Stamp Settings</button>
+          <button id="save-stamps" class="btn primary">
+            Save Stamp Settings
+          </button>
           <span id="stamp-status" class="status"></span>
         </div>
       </section>
@@ -173,7 +179,8 @@
         <h2>Animations</h2>
 
         <div class="field">
-          <label><input type="checkbox" id="animations-enabled" /> Enable
+          <label
+            ><input type="checkbox" id="animations-enabled" /> Enable
             animations</label
           >
           <p class="hint">
@@ -263,7 +270,9 @@
         </div>
 
         <div class="actions">
-          <button id="save-channels" class="btn primary">Save Channel Lists</button>
+          <button id="save-channels" class="btn primary">
+            Save Channel Lists
+          </button>
           <span id="channel-status" class="status"></span>
         </div>
       </section>
@@ -273,8 +282,9 @@
         <h2>Fact Check Layer</h2>
 
         <div class="field">
-          <label><input type="checkbox" id="factcheck-enabled" /> Enable
-            ClaimReview lookups</label
+          <label
+            ><input type="checkbox" id="factcheck-enabled" /> Enable ClaimReview
+            lookups</label
           >
           <p class="hint">
             When enabled, Google Fact Check Tools API is queried for videos
@@ -295,9 +305,9 @@
         </div>
 
         <div class="actions">
-          <button id="save-factcheck" class="btn primary">Save Fact Check
-            Settings</button
-          >
+          <button id="save-factcheck" class="btn primary">
+            Save Fact Check Settings
+          </button>
           <span id="factcheck-status" class="status"></span>
         </div>
       </section>

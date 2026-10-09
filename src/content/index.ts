@@ -14,12 +14,14 @@ import { ThumbnailSwapper } from "./thumb-swapper";
 import { loadSettings, onSettingsChanged, type Settings } from "./settings";
 import { escapeDomText } from "./signals";
 import { webext } from "../utils/webext";
-import { setAnimationIntensity } from "./ui";
+import { setAnimationIntensity, applyResult as uiApplyResult } from "./ui";
 import "../styles/base.css";
 
 console.info("[nobait] content script loading (stamps + thumbnails)...");
 
-/** Videos already processed for stamps (avoid duplicate work) */
+/** Videos already processed for stamps (avoid duplicate work)
+ * Cleared on SPA navigation so revisits re-patch titles.
+ */
 const seen = new Map<
   string,
   { titleEl: HTMLElement; stampHost: HTMLElement }
@@ -61,7 +63,7 @@ async function main(): Promise<void> {
   observeNavigation();
   listenForResults();
 
-  // --- Live settings (P7): storage.onChanged → apply without reload ---
+  // Live settings: storage.onChanged → apply without reload
   const unsubscribeSettings = onSettingsChanged((next) => {
     currentSettings = next;
     settings = next;
@@ -81,6 +83,15 @@ async function main(): Promise<void> {
   window.addEventListener("nobait:debug", () => {
     console.debug("[nobait] settings:", settings);
   });
+
+  // Clear seen cache on SPA navigation so revisits re-patch (QA seam note).
+  window.addEventListener("popstate", () => {
+    seen.clear();
+  });
+  const navApi = (globalThis as { navigation?: EventTarget }).navigation;
+  if (navApi && typeof navApi.addEventListener === "function") {
+    navApi.addEventListener("navigate", () => seen.clear());
+  }
 
   window.addEventListener("pagehide", () => {
     unsubscribeSettings();
@@ -143,7 +154,7 @@ async function processTitle(titleEl: HTMLElement): Promise<void> {
       };
     }> = await sendToBackground({ type: "EVALUATE_VIDEO", videoId, title });
     if (response.success && response.data?.result) {
-      applyStamp(stampHost, response.data.result);
+      applyStreamedResult({ ...response.data.result, videoId });
     }
   } catch (err) {
     console.error("[nobait] Failed to evaluate video:", videoId, err);
@@ -218,38 +229,54 @@ function listenForResults(): void {
   runtimeApi.onMessage.addListener((rawMessage: unknown) => {
     const message = rawMessage as {
       type?: string;
-      result?: Parameters<typeof applyResult>[0];
+      result?: StreamedResult;
     };
     if (message?.type === "NEW_RESULT" && message.result) {
-      applyResult(message.result);
+      applyStreamedResult(message.result);
     }
     return false;
   });
 }
 
 /**
- * Apply a result to the DOM immediately when chunk arrives (streaming)
+ * Shape of a streamed result message from the background worker.
  */
-function applyResult(result: {
+interface StreamedResult {
   videoId: string;
   rewrittenTitle: string;
   stamp: string;
   stampExplanation: string;
-}): void {
+  timing?: { inferenceMs: number; cached?: boolean };
+}
+
+/**
+ * Apply a streamed result to the DOM (M2 wiring).
+ *
+ * Delegates to the ui.ts `applyResult` facade so the full P5 choreography
+ * (title decode scramble → stamp pop → thumbnail pixel dissolve) plays,
+ * honoring `prefers-reduced-motion` and the animations toggle/intensity
+ * from Settings. Falls back to an instant patch if the entry is gone.
+ */
+function applyStreamedResult(result: StreamedResult): void {
   const entry = seen.get(result.videoId);
   if (!entry) return;
 
-  // Patch title
-  entry.titleEl.textContent = result.rewrittenTitle;
-  entry.titleEl.setAttribute("data-nobait-original", result.rewrittenTitle);
-
-  // Apply stamp (validate tier)
+  // Validate the tier before rendering anything.
   const tier = VALID_STAMP_TIERS.includes(result.stamp as StampTier)
     ? (result.stamp as StampTier)
     : StampTier.UNSURE;
+
+  // Render the badge first so animateStampPop can animate a real element.
   applyStamp(entry.stampHost, {
     stamp: tier,
     stampExplanation: result.stampExplanation,
+  });
+
+  uiApplyResult(entry.titleEl, {
+    videoId: result.videoId,
+    title: result.rewrittenTitle,
+    stampEl: entry.stampHost.firstElementChild as HTMLElement | undefined,
+    timing: result.timing ?? { inferenceMs: 0, cached: false },
   });
 }
 

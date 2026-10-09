@@ -59,17 +59,16 @@ export async function readSettings(): Promise<FactCheckSettings> {
     if (typeof area?.get !== "function") return { ...DEFAULT_SETTINGS };
 
     const unifiedBag =
-      ((await area.get(UNIFIED_SETTINGS_KEY)) as Record<string, unknown>) ??
-      {};
+      ((await area.get(UNIFIED_SETTINGS_KEY)) as Record<string, unknown>) ?? {};
     const unifiedRaw = unifiedBag[UNIFIED_SETTINGS_KEY];
     if (
       unifiedRaw != null &&
       typeof unifiedRaw === "object" &&
       "factcheck" in unifiedRaw
     ) {
-      const fc = (
-        unifiedRaw as Record<string, unknown>
-      )["factcheck"] as unknown;
+      const fc = (unifiedRaw as Record<string, unknown>)[
+        "factcheck"
+      ] as unknown;
       const r = (fc ?? {}) as Record<string, unknown>;
       return {
         apiKey:

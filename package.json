@@ -1,6 +1,6 @@
 {
   "name": "nobait",
-  "version": "0.5.0",
+  "version": "0.1.0",
   "description": "Replaces clickbait YouTube titles with factual alternatives, swaps thumbnails with real video frames, and adds credibility stamps.",
   "type": "module",
   "license": "AGPL-3.0",

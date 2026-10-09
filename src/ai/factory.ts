@@ -133,12 +133,13 @@ import { GeminiProvider } from "./gemini.js";
  * Legacy-compatible factory singleton. Wraps {@link createProvider} with the
  * P3 `initialize()` semantics so the background scheduler can keep its
  * provider lifecycle unchanged. Lazily constructs the underlying provider
- * using stored config; re-initializes when the preferred provider changes.
+ * using stored config; re-initializes when the configuration changes.
  */
 export class AIProviderFactory {
   private static instance: AIProviderFactory;
   private provider: AIProvider | null = null;
   private currentProviderName: string | null = null;
+  private configKey: string | null = null;
 
   private constructor() {}
 
@@ -151,31 +152,48 @@ export class AIProviderFactory {
 
   /**
    * Initialize (or reuse) a provider based on configuration.
+   *
+   * `preferredProvider` honors the options-page dropdown: it pins the
+   * chain to the chosen backend by suppressing the others' credentials
+   * ("gemini" ignores the Ollama URL, "ollama" ignores the Gemini key).
+   * `undefined`/"auto" follows the full chain. `ollamaModel` supplies the
+   * model tag required for the local endpoint.
    */
   async initialize(config: {
     preferredProvider?: "gemini" | "ollama" | "chrome";
     geminiApiKey?: string;
     ollamaUrl?: string;
+    ollamaModel?: string;
     useChromeAI?: boolean;
   }): Promise<AIProvider> {
-    const sameName =
-      this.provider !== null &&
-      this.currentProviderName === (config.preferredProvider ?? "gemini");
-    if (this.provider && sameName) {
+    const prefer = config.preferredProvider;
+    const configKey = JSON.stringify([
+      prefer ?? "auto",
+      config.geminiApiKey ?? "",
+      config.ollamaUrl ?? "",
+      config.ollamaModel ?? "",
+      config.useChromeAI !== false,
+    ]);
+    if (this.provider && this.configKey === configKey) {
       return this.provider;
     }
 
-    if (this.provider?.close) {
-      this.provider.close();
-    }
+    this.reset();
+    this.configKey = configKey;
 
     const selection = createProvider({
-      geminiApiKey: config.geminiApiKey,
-      ollamaBaseUrl: config.ollamaUrl,
+      geminiApiKey: prefer === "ollama" ? undefined : config.geminiApiKey,
+      ollamaBaseUrl: prefer === "gemini" ? undefined : config.ollamaUrl,
+      ollamaModel: config.ollamaModel,
       createGeminiProvider: (apiKey) => new GeminiProvider(apiKey),
     });
 
     if (selection.provider === null) {
+      if (prefer === "ollama") {
+        console.warn(
+          "[nobait] Ollama preferred but no local endpoint configured — falling back to Gemini.",
+        );
+      }
       // Fall back to the Gemini provider (loads its key from storage).
       const gemini = new GeminiProvider(config.geminiApiKey);
       if (!config.geminiApiKey) {
@@ -185,7 +203,7 @@ export class AIProviderFactory {
       this.currentProviderName = "gemini";
     } else {
       this.provider = selection.provider;
-      this.currentProviderName = selection.reason;
+      this.currentProviderName = prefer ?? selection.reason;
     }
 
     return this.provider;

@@ -25,11 +25,14 @@ vi.mock("../storage/cache", () => ({
     init: vi.fn().mockResolvedValue(undefined),
     cleanup: vi.fn().mockResolvedValue(undefined),
     close: vi.fn(),
+    counts: vi.fn().mockResolvedValue({ analysisCount: 0, negativeCount: 0 }),
+    clearAll: vi.fn().mockResolvedValue(undefined),
   },
 }));
 vi.mock("../ai/factory", () => ({
   aiProviderFactory: {
     initialize: vi.fn().mockResolvedValue(null),
+    reset: vi.fn(),
   },
 }));
 vi.mock("../ai/gemini", () => ({
