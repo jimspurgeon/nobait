@@ -6,7 +6,7 @@
  *  1. White glyph on the badge fill ≥ 4.5:1 (the glyph is text-like).
  *  2. Badge fill vs the page background ≥ 3:1 (non-text contrast, WCAG 1.4.11).
  *
- * Also asserts glyphs are pairwise distinct (color-blind safety: shape,
+ * Also asserts icons are pairwise distinct (color-blind safety: shape,
  * not color, carries the meaning).
  */
 
@@ -64,8 +64,8 @@ describe("badge WCAG AA contrast", () => {
     });
   }
 
-  test("glyphs are pairwise distinct (color-blind safe)", () => {
-    const glyphs = STAMP_TIERS.map((t) => BADGE_SPECS[t].glyph);
+  test("icons are pairwise distinct (color-blind safe)", () => {
+    const glyphs = STAMP_TIERS.map((t) => BADGE_SPECS[t].icon);
     expect(new Set(glyphs).size).toBe(glyphs.length);
   });
 

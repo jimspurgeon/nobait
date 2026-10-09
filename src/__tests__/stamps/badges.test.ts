@@ -34,8 +34,8 @@ describe("BADGE_SPECS WCAG AA contrast (white glyph on tier fill)", () => {
     });
   }
 
-  it("every tier has a distinct glyph (color-blind safety)", () => {
-    const glyphs = Object.values(BADGE_SPECS).map((s) => s.glyph);
+  it("every tier has a distinct icon (color-blind safety)", () => {
+    const glyphs = Object.values(BADGE_SPECS).map((s) => s.icon);
     expect(new Set(glyphs).size).toBe(glyphs.length);
   });
 });
