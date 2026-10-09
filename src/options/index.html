@@ -10,6 +10,27 @@
     <main class="container">
       <h1>nobait Settings</h1>
 
+      <!-- First-run / zero-config setup banner -->
+      <section class="card setup-banner hidden" id="setup-banner">
+        <h2>🚀 Almost ready</h2>
+        <p id="setup-banner-text">
+          nobait needs an AI backend to rewrite titles &amp; stamp videos.
+          Thumbnails already work — configure an AI below.
+        </p>
+        <div class="setup-actions">
+          <a
+            class="btn primary"
+            href="https://aistudio.google.com/apikey"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Get a free Gemini key ↗</a
+          >
+          <span class="hint"
+            >Free tier is plenty — nobait batches &amp; caches aggressively.</span
+          >
+        </div>
+      </section>
+
       <!-- AI Backend section -->
       <section class="card" id="ai-backend">
         <h2>AI Backend</h2>

@@ -5,6 +5,7 @@ import { GeminiProvider } from "../ai/gemini";
 import { AIInput, StampResult } from "../stamps/types";
 import { evaluateFactCheck, StampTier as FactCheckTier } from "./factcheck";
 import { webext } from "../utils/webext";
+import { detectOllama } from "../ai/autodetect";
 import {
   getSettings,
   onSettingsChanged,
@@ -21,11 +22,18 @@ export { CACHE_TTL_MS };
  */
 class BackgroundWorker {
   private initialized = false;
+  /** Human-readable name of the active provider, for the options UI. */
+  private activeProvider: string | null = null;
 
   async init(): Promise<void> {
     if (this.initialized) return;
 
     console.log("[nobait] Initializing background worker...");
+
+    // Register the message handler FIRST — a slow Ollama autodetect probe
+    // (or any future init step) must never delay responsiveness to
+    // content scripts.
+    this.setupMessageHandler();
 
     // Initialize cache database
     await cacheDB.init();
@@ -33,9 +41,6 @@ class BackgroundWorker {
     // Initialize AI provider factory from unified settings
     const settings = await getSettings();
     await this.applyAiSettings(settings);
-
-    // Set up message handler
-    this.setupMessageHandler();
 
     // Live settings: re-initialize the provider when AI config changes.
     onSettingsChanged((next) => {
@@ -53,11 +58,11 @@ class BackgroundWorker {
    * Handle messages from content scripts
    */
   private setupMessageHandler(): void {
-    const handleMessage = (
+    const handleMessage = async (
       rawMessage: unknown,
       _sender: unknown,
       _sendResponse?: (response: unknown) => void,
-    ): boolean | Promise<unknown> => {
+    ): Promise<unknown> => {
       const message = (rawMessage ?? {}) as {
         type?: string;
         [key: string]: unknown;
@@ -69,6 +74,7 @@ class BackgroundWorker {
         transcript: string;
         chapters: Array<{ startMs: number; title: string }>;
         key: string;
+        url: string;
       }>;
 
       // Firefox-native pattern: return a Promise for async responses
@@ -106,10 +112,69 @@ class BackgroundWorker {
               error: String(err),
             }));
 
+        case "GET_PROVIDER_STATUS":
+          return Promise.resolve({
+            success: true,
+            provider: this.activeProvider,
+            detectedLocal: this.detectedLocal,
+          });
+
+        case "VALIDATE_GEMINI_KEY": {
+          const key = String(msg.key ?? "").trim();
+          if (!key) {
+            return Promise.resolve({
+              success: false,
+              error: "empty key",
+            });
+          }
+          // Cheapest possible authenticated call: list model names.
+          try {
+            const resp = await fetch(
+              "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1",
+              { headers: { "x-goog-api-key": key } },
+            );
+            if (resp.ok) return { success: true };
+            const body = (await resp.json().catch(() => ({}))) as {
+              error?: { message?: string };
+            };
+            return {
+              success: false,
+              error: body.error?.message ?? `HTTP ${resp.status}`,
+            };
+          } catch (cause) {
+            return { success: false, error: String(cause) };
+          }
+        }
+
         case "nobait:clear-thumb-cache":
           return this.clearThumbCaches().then(
             () => ({ success: true }) as const,
           );
+
+        case "nobait:fetch-sprite": {
+          // Sprite fetches are proxied through the background because
+          // i.ytimg.com serves no CORS headers: content-script fetch()
+          // cannot read the body, but the background's host_permissions
+          // exempt it from CORS entirely.
+          const url = String(msg.url ?? "");
+          return fetch(url, { credentials: "omit" })
+            .then(async (resp: Response) => {
+              if (!resp.ok) {
+                return { success: false, error: `sprite fetch ${resp.status}` };
+              }
+              const blob = await resp.blob();
+              // Structured-cloneable representation of the bytes.
+              const buf = await blob.arrayBuffer();
+              return {
+                success: true,
+                data: { bytes: new Uint8Array(buf) },
+              };
+            })
+            .catch((err: unknown) => ({
+              success: false,
+              error: String(err),
+            }));
+        }
 
         default:
           console.warn("[nobait] Unknown message type:", message.type);
@@ -138,18 +203,50 @@ class BackgroundWorker {
    * Feed unified settings into the provider factory. The user's backend
    * preference (options dropdown) selects the provider chain: a specific
    * backend pins the factory to it, `auto` follows the default chain.
+   *
+   * Zero-config path: when the user has configured nothing at all, probe
+   * the local machine for a running Ollama server and silently adopt it
+   * (detected once per worker lifetime, memoized into `detectedLocal`).
    */
+  private detectedLocal: { url: string; model: string } | null = null;
+  private detectedLocalProbed = false;
+
   private async applyAiSettings(
     settings: Awaited<ReturnType<typeof getSettings>>,
   ): Promise<void> {
-    await aiProviderFactory.reset();
     const ai = settings.ai;
+    const nothingConfigured =
+      !ai.geminiApiKey &&
+      !(ai.ollamaUrl && ai.ollamaModel) &&
+      ai.backend !== "chrome";
+    if (nothingConfigured && !this.detectedLocalProbed) {
+      this.detectedLocal = await detectOllama(globalThis.fetch).catch(
+        (e: unknown) => {
+          console.warn("[nobait] Local AI autodetect failed:", e);
+          return null;
+        },
+      );
+      console.log(
+        this.detectedLocal ?? "none",
+      );
+      this.detectedLocalProbed = true;
+      if (this.detectedLocal) {
+        console.log(
+          "[nobait] Auto-detected local Ollama:",
+          this.detectedLocal.url,
+          this.detectedLocal.model,
+        );
+      }
+    }
+
+    await aiProviderFactory.reset();
     await aiProviderFactory.initialize({
       preferredProvider: ai.backend === "auto" ? undefined : ai.backend,
       geminiApiKey: ai.geminiApiKey || undefined,
-      ollamaUrl: ai.ollamaUrl || undefined,
-      ollamaModel: ai.ollamaModel || undefined,
+      ollamaUrl: ai.ollamaUrl || this.detectedLocal?.url,
+      ollamaModel: ai.ollamaModel || this.detectedLocal?.model,
     });
+    this.activeProvider = aiProviderFactory.getCurrentProviderName();
   }
 
   /**

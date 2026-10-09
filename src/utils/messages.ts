@@ -16,7 +16,11 @@ export type ContentToBackgroundMessage =
     }
   | { type: "GET_CACHE_STATUS" }
   | { type: "CLEAR_CACHE" }
-  | { type: "SET_GEMINI_API_KEY"; key: string };
+  | { type: "SET_GEMINI_API_KEY"; key: string }
+  | { type: "GET_PROVIDER_STATUS" }
+  | { type: "VALIDATE_GEMINI_KEY"; key: string }
+  | { type: "nobait:clear-thumb-cache" }
+  | { type: "nobait:fetch-sprite"; url: string };
 
 /** Message types sent from background to content script */
 export type BackgroundToContentMessage =

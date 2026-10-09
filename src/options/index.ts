@@ -332,10 +332,33 @@ function wireEvents(): void {
   // --- Buttons (explicit save per section) ---
   el("save-ai")?.addEventListener("click", async () => {
     const update = collectFormState();
-    await saveSettings({ ai: update.ai });
-    setStatus("ai-status", "AI settings saved.");
     const apiKey = el<HTMLInputElement>("api-key");
-    if (apiKey && apiKey.value) {
+    const typedKey = apiKey?.value.trim() ?? "";
+
+    // Validate a newly-typed Gemini key before persisting it — catching
+    // typos at save time beats debugging "no stamps" later.
+    if (typedKey) {
+      setStatus("ai-status", "Validating key…");
+      const check = (await sendMessage({
+        type: "VALIDATE_GEMINI_KEY",
+        key: typedKey,
+      })) as { success?: boolean; error?: string } | null;
+      if (!check?.success) {
+        setStatus(
+          "ai-status",
+          `Key invalid: ${check?.error ?? "network error"}`,
+          true,
+        );
+        return; // keep the typed value so the user can fix it
+      }
+    }
+
+    await saveSettings({ ai: update.ai });
+    setStatus(
+      "ai-status",
+      typedKey ? "AI settings saved — key validated ✓" : "AI settings saved.",
+    );
+    if (apiKey && typedKey) {
       apiKey.value = "";
       apiKey.placeholder = "•••••••••••••••• (saved)";
     }
@@ -453,32 +476,59 @@ function wireEvents(): void {
 }
 
 /**
- * Update the "Currently using: X" hint below AI settings. Mirrors the factory
- * priority chain for display purposes.
+ * Update the "Currently using: X" hint below AI settings. Asks the
+ * background worker for the *actual* active provider (which includes the
+ * zero-config Ollama autodetect) and toggles the setup banner.
  */
 async function updateProviderBadge(): Promise<void> {
   const strong = el("current-provider");
-  if (!strong) return;
+  const banner = el("setup-banner");
+  let provider: string | null = null;
+  let detectedLocal: { url: string; model: string } | null = null;
+  try {
+    const status = (await sendMessage({ type: "GET_PROVIDER_STATUS" })) as {
+      provider?: string | null;
+      detectedLocal?: { url: string; model: string } | null;
+    } | null;
+    provider = status?.provider ?? null;
+    detectedLocal = status?.detectedLocal ?? null;
+  } catch {
+    // Background unavailable — fall back to local-only rendering below.
+  }
+
   const settings = await getSettings();
-  if (settings.ai.backend !== "auto") {
-    strong.textContent =
-      settings.ai.backend === "chrome"
-        ? "Chrome built-in (forced)"
-        : settings.ai.backend === "gemini"
-          ? "Gemini (forced)"
-          : settings.ai.backend === "ollama"
-            ? "Ollama (forced)"
-            : "Unknown";
+  const ollamaActive =
+    provider?.startsWith("ollama:") ||
+    (provider === null && settings.ai.ollamaUrl !== "") ||
+    (provider === null && !!detectedLocal);
+
+  if (ollamaActive || (provider && provider !== "gemini" && provider !== "None")) {
+    const shown =
+      provider && provider !== "None configured" && provider !== "no provider available"
+        ? provider
+        : detectedLocal
+          ? `Ollama (auto-detected ${detectedLocal.model})`
+          : provider;
+    if (strong) strong.textContent = shown ?? "Ollama (auto)";
+    banner?.classList.add("hidden");
     return;
   }
-  // Auto: chain order per factory.ts
-  if (settings.ai.geminiApiKey) {
-    strong.textContent = "Gemini (auto — key set)";
-  } else if (settings.ai.ollamaUrl) {
-    strong.textContent = "Ollama (auto — local URL set)";
-  } else {
-    strong.textContent = "None configured";
+
+  if (provider === "gemini" || settings.ai.geminiApiKey) {
+    if (strong) strong.textContent = "Gemini";
+    banner?.classList.add("hidden");
+    return;
   }
+
+  // Nothing configured and nothing detected — show the setup banner.
+  if (strong) strong.textContent = "None configured";
+  const text = el("setup-banner-text");
+  if (text) {
+    text.textContent =
+      "nobait needs an AI backend to rewrite titles & stamp videos. " +
+      "Thumbnails already work — paste a free Gemini key below, or install Ollama for fully local AI.";
+  }
+  banner?.classList.remove("hidden");
 }
 
 async function init(): Promise<void> {

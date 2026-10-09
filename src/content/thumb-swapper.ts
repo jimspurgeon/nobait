@@ -46,7 +46,7 @@ export class ThumbnailSwapper {
     }
     if (byId.size === 0) return;
 
-    const urls = await this.thumbMgr.getMany([...byId.keys()]);
+    const urls = await this.thumbMgr.getMany([...byId.keys()])
     const swaps: Array<{ img: HTMLImageElement; src: string }> = [];
     for (const [id, url] of urls.entries()) {
       const img = byId.get(id);

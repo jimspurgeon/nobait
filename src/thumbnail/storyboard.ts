@@ -83,7 +83,23 @@ export function parseSpecString(
     const intervalMs = toNum(f[2]);
     const columns = toNum(f[3]);
     const rows = toNum(f[4]);
-    const sigh = f.length >= 9 && f[8] ? f[8] : null;
+    // Field layout evolved over the years; `sigh` has lived at index 6,
+    // 7, and 8 depending on era. Scan the tail fields for the first
+    // non-empty string that looks like a signature (not numeric, not
+    // "default"/"M$M" placeholders).
+    let sigh: string | null = null;
+    for (let k = f.length - 1; k >= 5; k--) {
+      const v = f[k];
+      if (
+        v &&
+        v !== "default" &&
+        v !== "M$M" &&
+        !/^\d+$/.test(v)
+      ) {
+        sigh = v;
+        break;
+      }
+    }
     if (!(width > 0 && height > 0 && intervalMs > 0 && columns > 0 && rows > 0))
       continue;
 
@@ -115,11 +131,23 @@ export function parseSpecString(
 
 /** Convert a URL template to a fetchable sheet URL. */
 export function buildSheetUrl(level: StoryboardLevel, sheet: number): string {
-  return level.baseUrl
+  // Placeholder formats in the wild, newest first:
+  //   storyboard3_L$L/$N.jpg   (modern: no trailing $ on placeholders)
+  //   storyboard3_L$L/$N$.jpg (legacy: $L$ / $N$ / $M$)
+  // Replace legacy forms first so "$L$" is consumed before "$L".
+  let url = level.baseUrl
     .replace(/\$L\$/g, String(level.level))
     .replace(/\$N\$/g, `M${sheet}`)
     .replace(/\$M\$/g, String(sheet))
-    .replace(/\$sigh\$/g, level.sigh ?? "");
+    .replace(/\$sigh\$/g, level.sigh ?? "")
+    .replace(/\$L/g, String(level.level))
+    .replace(/\$N/g, `M${sheet}`);
+  // Modern specs carry the signature only in the level descriptor — the
+  // base URL query has `sqp=` but no `sigh`. Append it when missing.
+  if (level.sigh && !/[?&]sigh=/.test(url)) {
+    url += (url.includes("?") ? "&" : "?") + "sigh=" + encodeURIComponent(level.sigh);
+  }
+  return url;
 }
 
 interface RawPlayerResponse {

@@ -21,7 +21,9 @@ import { selectTile } from "./frame";
 import { cropTile } from "./render";
 import { fetchPlayerResponse } from "./innertube";
 import { ThumbnailCache } from "../storage/thumbnail-cache";
+import { spriteViaBackground } from "./sprite-bridge";
 import type { FramePosition } from "./types";
+import type { StoryboardLevel } from "./storyboard";
 
 const SPEC_TTL_MS = 90 * 864e5;
 const SPEC_DB = "nobait-sprites";
@@ -149,12 +151,19 @@ export class ThumbnailManager {
   }
 
   private async resolveOne(videoId: string): Promise<string | null> {
-    // 1. Spec (cached → InnerTube).
+    // 1. Spec (cached → InnerTube). On missing/unusable spec, degrade to
+    //    the always-available mid-video frame thumbnail (hq2.jpg).
     const spec = (await specGet(videoId)) ?? (await this.fetchSpec(videoId));
-    if (!spec) return null;
+    if (!spec) return this.resolveFallbackFrame(videoId);
 
     // 2. Frame math (deterministic).
-    const level = selectLevel(spec, MIN_TILE_WIDTH);
+    let level: StoryboardLevel | null = null;
+    try {
+      level = selectLevel(spec, MIN_TILE_WIDTH);
+    } catch {
+      level = null;
+    }
+    if (!level) return this.resolveFallbackFrame(videoId);
     const { frameIndex, sheet, rect } = selectTile(
       videoId,
       this.position,
@@ -170,14 +179,39 @@ export class ThumbnailManager {
     let bitmap = this.sprites.get(sheetUrl);
     if (!bitmap) {
       const blob = await this.loadSprite(sheetUrl);
-      if (!blob) return null;
+      // Sprite fetch failed (expired sig, removed sheet, rate limit…) —
+      // fall back to the mid-video frame rather than showing nothing.
+      if (!blob) return this.resolveFallbackFrame(videoId);
       bitmap = await createImageBitmap(blob);
       this.sprites.set(sheetUrl, bitmap);
     }
     const out = await cropTile(bitmap, level, rect);
-    if (!out) return null;
+    if (!out) return this.resolveFallbackFrame(videoId);
     void this.cache.put(videoId, frameIndex, out);
     return URL.createObjectURL(out);
+  }
+
+  /**
+   * Guaranteed-available replacement frame: YouTube exposes four real
+   * video-frame thumbnails (0/25/50/75%) as public, unsigned images.
+   * `hq2` is the 50% frame. No InnerTube, no signatures, no rate limit.
+   */
+  private resolveFallbackFrame(
+    videoId: string,
+    key: "1" | "2" | "3" = "2",
+  ): Promise<string | null> {
+    const p = this.fallbackLoads.get(videoId) ??
+      spriteViaBackground(
+        `https://i.ytimg.com/vi/${videoId}/hq${key}.jpg`,
+      ).then((bytes) =>
+        bytes
+          ? URL.createObjectURL(
+              new Blob([bytes.slice().buffer], { type: "image/jpeg" }),
+            )
+          : null,
+      );
+    this.fallbackLoads.set(videoId, p);
+    return p;
   }
 
   private async fetchSpec(
@@ -194,12 +228,19 @@ export class ThumbnailManager {
   }
 
   private spriteLoads = new Map<string, Promise<Blob | null>>();
+  private fallbackLoads = new Map<string, Promise<string | null>>();
 
   private loadSprite(url: string): Promise<Blob | null> {
     let p = this.spriteLoads.get(url);
     if (!p) {
-      p = this.fetchImpl(url, { credentials: "omit" })
-        .then(async (r) => (r.ok ? r.blob() : null))
+      // i.ytimg.com sends no CORS headers, so a content-script fetch
+      // cannot read the body. Proxy the bytes through the background
+      // script, whose host_permissions for *.ytimg.com exempt it from
+      // CORS, then rehydrate a Blob in the content world.
+      p = spriteViaBackground(url)
+        .then((bytes) =>
+          bytes ? new Blob([bytes.slice().buffer], { type: "image/jpeg" }) : null,
+        )
         .catch(() => null);
       this.spriteLoads.set(url, p);
     }
@@ -211,5 +252,6 @@ export class ThumbnailManager {
     for (const b of this.sprites.values()) b.close();
     this.sprites.clear();
     this.spriteLoads.clear();
+    this.fallbackLoads.clear();
   }
 }

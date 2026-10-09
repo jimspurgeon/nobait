@@ -140,6 +140,14 @@ export class AIProviderFactory {
   private provider: AIProvider | null = null;
   private currentProviderName: string | null = null;
   private configKey: string | null = null;
+  /** Last fully-applied config (preserves autodetected Ollama across calls). */
+  private lastAppliedConfig: {
+    preferredProvider?: "gemini" | "ollama" | "chrome";
+    geminiApiKey?: string;
+    ollamaUrl?: string;
+    ollamaModel?: string;
+    useChromeAI?: boolean;
+  } | null = null;
 
   private constructor() {}
 
@@ -166,6 +174,18 @@ export class AIProviderFactory {
     ollamaModel?: string;
     useChromeAI?: boolean;
   }): Promise<AIProvider> {
+    // An empty config (e.g. the scheduler's flush-time re-init) inherits
+    // the last settings-driven config so an autodetected local Ollama
+    // survives instead of being wiped back to "no provider".
+    if (
+      config.preferredProvider === undefined &&
+      config.geminiApiKey === undefined &&
+      config.ollamaUrl === undefined &&
+      config.ollamaModel === undefined &&
+      this.lastAppliedConfig !== null
+    ) {
+      config = { ...this.lastAppliedConfig };
+    }
     const prefer = config.preferredProvider;
     const configKey = JSON.stringify([
       prefer ?? "auto",
@@ -180,6 +200,7 @@ export class AIProviderFactory {
 
     this.reset();
     this.configKey = configKey;
+    this.lastAppliedConfig = { ...config };
 
     const selection = createProvider({
       geminiApiKey: prefer === "ollama" ? undefined : config.geminiApiKey,
