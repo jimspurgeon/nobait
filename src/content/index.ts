@@ -34,6 +34,15 @@ let currentSettings: Settings | null = null;
 const pendingCards = new Set<HTMLElement>();
 let rafId: number | null = null;
 
+/** Wait for document.body (content script runs at document_start). */
+function onBodyReady(cb: () => void): void {
+  if (document.body) {
+    cb();
+    return;
+  }
+  document.addEventListener("DOMContentLoaded", cb, { once: true });
+}
+
 async function main(): Promise<void> {
   let settings: Settings = await loadSettings();
   currentSettings = settings;
@@ -57,11 +66,19 @@ async function main(): Promise<void> {
     },
   });
 
-  // --- Stamps pipeline (P3/P4) ---
-  scanAndProcess();
-  observeMutations();
-  observeNavigation();
-  listenForResults();
+  // Content script runs at document_start — document.body may be null.
+  // All DOM-touching setup must wait for body, else observer construction
+  // throws and silently kills the rest of main().
+  onBodyReady(() => {
+    observer.start();
+    observer.initialScan();
+
+    // --- Stamps pipeline (P3/P4) ---
+    scanAndProcess();
+    observeMutations();
+    observeNavigation();
+    listenForResults();
+  });
 
   // Live settings: storage.onChanged → apply without reload
   const unsubscribeSettings = onSettingsChanged((next) => {
