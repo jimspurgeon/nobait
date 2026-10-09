@@ -4,9 +4,7 @@ import { aiProviderFactory } from "../ai/factory";
 import { GeminiProvider } from "../ai/gemini";
 import { AIInput, StampResult } from "../stamps/types";
 import { evaluateFactCheck, StampTier as FactCheckTier } from "./factcheck";
-
-declare const browser: any;
-declare const chrome: any;
+import { webext } from "../utils/webext";
 
 /**
  * Background service worker entry point — handles stamp pipeline (P3/P4)
@@ -41,72 +39,73 @@ class BackgroundWorker {
    */
   private setupMessageHandler(): void {
     const handleMessage = (
-      message: { type?: string; [key: string]: any },
+      rawMessage: unknown,
       _sender: unknown,
-      sendResponse: (response: any) => void,
-    ): boolean => {
+      _sendResponse?: (response: unknown) => void,
+    ): boolean | Promise<unknown> => {
+      const message = (rawMessage ?? {}) as {
+        type?: string;
+        [key: string]: unknown;
+      };
+      const msg = message as Partial<{
+        videoId: string;
+        title: string;
+        description: string;
+        transcript: string;
+        chapters: Array<{ startMs: number; title: string }>;
+        key: string;
+      }>;
+
+      // Firefox-native pattern: return a Promise for async responses
+      // (OnMessageListenerAsync signature). Chrome also supports this.
       switch (message.type) {
-        case "EVALUATE_VIDEO": {
-          this.handleEvaluateVideo({
-            videoId: message.videoId,
-            title: message.title,
-            description: message.description,
-            transcript: message.transcript,
-            chapters: message.chapters,
-          })
-            .then(sendResponse)
-            .catch((err) =>
-              sendResponse({ success: false, error: String(err) }),
-            );
-          return true; // Async response
-        }
+        case "EVALUATE_VIDEO":
+          return this.handleEvaluateVideo({
+            videoId: msg.videoId ?? "",
+            title: msg.title ?? "",
+            description: msg.description,
+            transcript: msg.transcript,
+            chapters: msg.chapters,
+          }).catch((err: unknown) => ({
+            success: false,
+            error: String(err),
+          }));
 
         case "GET_CACHE_STATUS":
-          this.getCacheStatus()
-            .then(sendResponse)
-            .catch((err) =>
-              sendResponse({ success: false, error: String(err) }),
-            );
-          return true;
+          return this.getCacheStatus().catch((err: unknown) => ({
+            success: false,
+            error: String(err),
+          }));
 
         case "CLEAR_CACHE":
-          this.clearCache()
-            .then(sendResponse)
-            .catch((err) =>
-              sendResponse({ success: false, error: String(err) }),
-            );
-          return true;
+          return this.clearCache().catch((err: unknown) => ({
+            success: false,
+            error: String(err),
+          }));
 
         case "SET_GEMINI_API_KEY":
-          this.setGeminiApiKey(message.key)
-            .then(() => sendResponse({ success: true }))
-            .catch((err) =>
-              sendResponse({ success: false, error: String(err) }),
-            );
-          return true;
+          return this.setGeminiApiKey(String(msg.key ?? ""))
+            .then(() => ({ success: true }))
+            .catch((err: unknown) => ({
+              success: false,
+              error: String(err),
+            }));
 
-        case "nobait:clear-thumb-cache": {
-          void this.clearThumbCaches().then(() => {
-            // P2 style reply (service-worker postMessage)
-          });
-          sendResponse({ success: true });
-          return true;
-        }
+        case "nobait:clear-thumb-cache":
+          return this.clearThumbCaches().then(
+            () => ({ success: true }) as const,
+          );
 
         default:
           console.warn("[nobait] Unknown message type:", message.type);
-          sendResponse({ success: false, error: "Unknown message type" });
-          return false;
+          return Promise.resolve({
+            success: false,
+            error: "Unknown message type",
+          });
       }
     };
 
-    // Firefox WebExtensions API
-    const runtimeApi =
-      typeof browser !== "undefined" && browser?.runtime?.onMessage
-        ? browser.runtime
-        : typeof chrome !== "undefined" && chrome?.runtime?.onMessage
-          ? chrome.runtime
-          : null;
+    const runtimeApi = webext.runtime;
 
     if (runtimeApi) {
       runtimeApi.onMessage.addListener(handleMessage);
@@ -129,7 +128,11 @@ class BackgroundWorker {
     description?: string;
     transcript?: string;
     chapters?: Array<{ startMs: number; title: string }>;
-  }): Promise<{ success: boolean; result?: StampResult }> {
+  }): Promise<{
+    success: boolean;
+    result?: StampResult;
+    error?: string;
+  }> {
     const input: AIInput = {
       videoId: payload.videoId,
       title: payload.title,
@@ -189,12 +192,7 @@ class BackgroundWorker {
    * Broadcast result to all YouTube tabs (for streaming updates)
    */
   private async broadcastResult(result: StampResult): Promise<void> {
-    const tabsApi =
-      typeof browser !== "undefined" && browser?.tabs
-        ? browser.tabs
-        : typeof chrome !== "undefined" && chrome?.tabs
-          ? chrome.tabs
-          : null;
+    const tabsApi = webext.tabs;
 
     if (!tabsApi) return;
 
@@ -202,7 +200,7 @@ class BackgroundWorker {
 
     try {
       const tabs = await tabsApi.query({});
-      for (const tab of tabs as any[]) {
+      for (const tab of tabs) {
         if (tab.id != null) {
           try {
             await tabsApi.sendMessage(tab.id, message);

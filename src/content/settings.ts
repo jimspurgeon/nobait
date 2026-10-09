@@ -5,6 +5,7 @@
  */
 
 import { DEFAULT_THUMB_CONFIG, type FramePosition } from "../thumbnail/types";
+import { webext } from "../utils/webext";
 
 export interface NobaitSettings {
   thumbnailPosition: FramePosition;
@@ -34,11 +35,9 @@ function posFromRaw(raw: unknown): FramePosition {
 
 export async function loadSettings(): Promise<NobaitSettings> {
   try {
-    const api =
-      (globalThis as Record<string, any>).browser ??
-      (globalThis as Record<string, any>).chrome;
-    const stored = await api?.storage?.local?.get(["settings"]);
-    const raw = stored?.settings ?? {};
+    const area = webext.storage?.local;
+    const stored = (await area?.get(["settings"])) ?? {};
+    const raw = (stored.settings ?? {}) as Record<string, unknown>;
     return {
       thumbnailPosition: posFromRaw(raw.thumbnailPosition),
       debug: Boolean(raw.debug),

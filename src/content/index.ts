@@ -12,10 +12,8 @@ import { attachTooltip } from "../stamps/tooltips";
 import { SpatObserver } from "./observer";
 import { ThumbnailSwapper } from "./thumb-swapper";
 import { loadSettings, type NobaitSettings } from "./settings";
+import { webext } from "../utils/webext";
 import "../styles/base.css";
-
-declare const browser: any;
-declare const chrome: any;
 
 console.info("[nobait] content script loading (stamps + thumbnails)...");
 
@@ -181,29 +179,19 @@ function observeNavigation(): void {
  * Listen for streamed results from background
  */
 function listenForResults(): void {
-  const api =
-    typeof browser !== "undefined"
-      ? browser
-      : typeof chrome !== "undefined"
-        ? chrome
-        : null;
-  if (!api?.runtime?.onMessage) return;
+  const runtimeApi = webext.runtime;
+  if (!runtimeApi?.onMessage) return;
 
-  if (typeof browser !== "undefined") {
-    browser.runtime.onMessage.addListener((message: any) => {
-      if (message?.type === "NEW_RESULT") {
-        applyResult(message.result);
-      }
-      return false;
-    });
-  } else if (typeof chrome !== "undefined") {
-    chrome.runtime.onMessage.addListener((message: any) => {
-      if (message?.type === "NEW_RESULT") {
-        applyResult(message.result);
-      }
-      return false;
-    });
-  }
+  runtimeApi.onMessage.addListener((rawMessage: unknown) => {
+    const message = rawMessage as {
+      type?: string;
+      result?: Parameters<typeof applyResult>[0];
+    };
+    if (message?.type === "NEW_RESULT" && message.result) {
+      applyResult(message.result);
+    }
+    return false;
+  });
 }
 
 /**
