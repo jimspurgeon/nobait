@@ -7,10 +7,10 @@
   "private": true,
   "scripts": {
     "dev": "vite",
-    "dev:firefox": "cross-env VITE_TARGET=firefox vite build --watch --mode development",
+    "dev:firefox": "node scripts/build.mjs --watch",
     "dev:chrome": "cross-env VITE_TARGET=chrome vite build --watch --mode development",
     "build": "tsc --noEmit && vite build",
-    "build:firefox": "cross-env VITE_TARGET=firefox vite build",
+    "build:firefox": "node scripts/build.mjs",
     "build:chrome": "cross-env VITE_TARGET=chrome vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
