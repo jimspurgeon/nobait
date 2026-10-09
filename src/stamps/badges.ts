@@ -15,11 +15,15 @@ export const BADGE_SPECS: Record<StampTier, BadgeSpec> = {
   [StampTier.LEGITIMATE]: { glyph: "✓", color: "#1a7f37", label: "Legitimate" },
   [StampTier.EXAGGERATED]: {
     glyph: "!",
-    color: "#b58900",
+    color: "#8a6d00", // amber, ≥4.5:1 with white glyph (WCAG AA)
     label: "Exaggerated",
   },
   [StampTier.MISLEADING]: { glyph: "✗", color: "#cf222e", label: "Misleading" },
-  [StampTier.CLICKBAIT]: { glyph: "🎣", color: "#d1850f", label: "Clickbait" },
+  [StampTier.CLICKBAIT]: {
+    glyph: "🎣",
+    color: "#9a5b0a", // burnt orange, ≥4.5:1 with white glyph (WCAG AA)
+    label: "Clickbait",
+  },
   [StampTier.FAKE]: { glyph: "☠", color: "#8b1d24", label: "Fake" },
   [StampTier.UNSURE]: { glyph: "?", color: "#6e7781", label: "Unsure" },
 };
