@@ -4,6 +4,11 @@ import { aiProviderFactory } from "../ai/factory";
 import { GeminiProvider } from "../ai/gemini";
 import { AIInput, StampResult } from "../stamps/types";
 import { evaluateFactCheck, StampTier as FactCheckTier } from "./factcheck";
+import { getSettings, onSettingsChanged, CACHE_TTL_MS } from "../settings/index";
+
+// Re-export for the scheduler's TTL computation (avoids a circular import
+// of the settings module shape into scheduler.ts's static constants).
+export { CACHE_TTL_MS };
 
 declare const browser: any;
 declare const chrome: any;
@@ -23,11 +28,24 @@ class BackgroundWorker {
     // Initialize cache database
     await cacheDB.init();
 
-    // Initialize AI provider factory
-    await aiProviderFactory.initialize({});
+    // Initialize AI provider factory from unified settings
+    const settings = await getSettings();
+    await aiProviderFactory.initialize({
+      geminiApiKey: settings.ai.geminiApiKey || undefined,
+      ollamaUrl: settings.ai.ollamaUrl || undefined,
+    });
 
     // Set up message handler
     this.setupMessageHandler();
+
+    // Live settings: re-initialize the provider when AI config changes.
+    onSettingsChanged((next) => {
+      void aiProviderFactory.reset();
+      void aiProviderFactory.initialize({
+        geminiApiKey: next.ai.geminiApiKey || undefined,
+        ollamaUrl: next.ai.ollamaUrl || undefined,
+      });
+    });
 
     // Periodic cleanup (hourly)
     setInterval(() => cacheDB.cleanup().catch(console.error), 60 * 60 * 1000);

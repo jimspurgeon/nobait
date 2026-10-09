@@ -3,6 +3,7 @@ import { aiProviderFactory } from "../ai/factory";
 import { MODEL_VERSION } from "../ai/gemini";
 import { parseStampTier } from "../ai/classify";
 import { cacheDB } from "../storage/cache";
+import { getSettings, CACHE_TTL_MS, type CacheTTL } from "../settings/index";
 
 interface PendingRequest {
   input: AIInput;
@@ -217,19 +218,26 @@ export class EvaluationScheduler {
       modelVersion: MODEL_VERSION,
     };
 
-    // Cache the result
+    // Cache the result using the user-configured TTL (default 7 days)
+    const cacheTtlMs = await this.getCacheTtlMs();
     await cacheDB.setAnalysis({
       videoId: stampResult.videoId,
       result: stampResult,
       inputHash: this.computeInputHash(req.input),
       modelVersion: MODEL_VERSION,
       createdAt: Date.now(),
-      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days TTL
+      expiresAt: Date.now() + cacheTtlMs,
     });
 
     // Notify listeners (streaming-like incremental delivery)
     this.emitResult(stampResult);
     req.resolve(stampResult);
+  }
+
+  /** Resolve the user-configured positive-cache TTL in ms. */
+  private async getCacheTtlMs(): Promise<number> {
+    const settings = await getSettings();
+    return CACHE_TTL_MS[settings.thumbnails.cacheTtl as CacheTTL] ?? CACHE_TTL_MS["7d"];
   }
 
   private computeInputHash(input: AIInput): string {
