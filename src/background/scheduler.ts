@@ -39,7 +39,8 @@ export class EvaluationScheduler {
   /** Listeners for incremental (streaming) results */
   private resultListeners: Set<(result: StampResult) => void> = new Set();
 
-  /** Use getInstance() in application code; constructor is public for tests */
+  /** Use getInstance() in application code; new is allowed for tests */
+  // eslint-disable-next-line @typescript-eslint/no-useless-constructor
   constructor() {}
 
   static getInstance(): EvaluationScheduler {

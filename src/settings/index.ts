@@ -149,9 +149,26 @@ export const DEFAULT_SETTINGS: Settings = {
  * Resolve the WebExtensions API namespace portably (Firefox `browser`,
  * Chrome `chrome`), tolerating absence (unit tests, non-extension pages).
  */
-function browserAPI(): any | undefined {
+interface StorageAreaLocal {
+  get: (key: string) => Promise<Record<string, unknown>>;
+  set: (obj: Record<string, unknown>) => Promise<void>;
+}
+
+interface BrowserLike {
+  storage?: {
+    local?: StorageAreaLocal;
+    onChanged?: {
+      addListener?: (cb: (changes: unknown, area: string) => void) => void;
+      removeListener?: (cb: (changes: unknown, area: string) => void) => void;
+    };
+    sync?: unknown;
+  };
+  runtime?: Record<string, unknown>;
+}
+
+function browserAPI(): BrowserLike | undefined {
   const g = globalThis as Record<string, unknown>;
-  return (g["browser"] ?? g["chrome"]) as ReturnType<typeof browserAPI>;
+  return (g["browser"] ?? g["chrome"]) as BrowserLike | undefined;
 }
 
 /** Deep-ish clone via structured clone (settings are plain JSON data). */
@@ -367,11 +384,9 @@ export function onSettingsChanged(
   const onChanged = area?.onChanged;
   if (!onChanged?.addListener) return () => {};
 
-  const handler = (
-    changes: Record<string, { newValue?: unknown }>,
-    areaName: string,
-  ) => {
+  const handler = (rawChanges: unknown, areaName: string) => {
     if (areaName !== "local") return;
+    const changes = rawChanges as Record<string, { newValue?: unknown }>;
     if (!(SETTINGS_KEY in changes)) return;
     listener(normalizeSettings(changes[SETTINGS_KEY]?.newValue));
   };

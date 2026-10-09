@@ -118,7 +118,8 @@ async function loadIntoForm(settings: Settings): Promise<void> {
   document
     .querySelectorAll<HTMLInputElement>('input[data-tier]')
     .forEach((cb) => {
-      cb.checked = settings.stamps.tiers[cb.dataset.tier!] !== false;
+      const tier = cb.dataset.tier;
+      if (tier) cb.checked = settings.stamps.tiers[tier] !== false;
     });
 
   // --- Animations ---
@@ -211,7 +212,8 @@ function collectFormState(): DeepPartialSettings {
   document
     .querySelectorAll<HTMLInputElement>('input[data-tier]')
     .forEach((cb) => {
-      tiers[cb.dataset.tier!] = cb.checked;
+      const tier = cb.dataset.tier;
+      if (tier) tiers[tier] = cb.checked;
     });
   update.stamps = { ...update.stamps, tiers };
 

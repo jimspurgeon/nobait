@@ -5,7 +5,7 @@
  */
 
 import { SELECTORS, extractVideoId } from "./dom";
-import { sendToBackground, MessageResponse } from "../utils/messages";
+import { sendToBackground, type MessageResponse } from "../utils/messages";
 import { StampTier, VALID_STAMP_TIERS } from "../stamps/types";
 import { buildBadge } from "../stamps/badges";
 import { attachTooltip } from "../stamps/tooltips";
@@ -15,8 +15,8 @@ import { setAnimationIntensity } from "./ui";
 import { loadSettings, onSettingsChanged, type Settings } from "./settings";
 import "../styles/base.css";
 
-declare const browser: any;
-declare const chrome: any;
+/** Message payload received from the background worker (NEW_RESULT et al). */
+type RuntimeMessageHandler = (message: unknown) => boolean;
 
 console.info("[nobait] content script loading (stamps + thumbnails)...");
 
@@ -30,7 +30,7 @@ const seen = new Map<
 let currentSettings: Settings | null = null;
 
 /** Fair scheduling for IntersectionObserver callbacks */
-let pendingCards = new Set<HTMLElement>();
+const pendingCards = new Set<HTMLElement>();
 let rafId: number | null = null;
 
 async function main(): Promise<void> {
@@ -221,20 +221,21 @@ function listenForResults(): void {
         : null;
   if (!api?.runtime?.onMessage) return;
 
+  const onMessage = (message: unknown): boolean => {
+    const msg = message as {
+      type?: string;
+      result?: Parameters<typeof applyResult>[0];
+    };
+    if (msg?.type === "NEW_RESULT" && msg.result) {
+      applyResult(msg.result);
+    }
+    return false;
+  };
+
   if (typeof browser !== "undefined") {
-    browser.runtime.onMessage.addListener((message: any) => {
-      if (message?.type === "NEW_RESULT") {
-        applyResult(message.result);
-      }
-      return false;
-    });
+    browser.runtime.onMessage.addListener(onMessage as RuntimeMessageHandler);
   } else if (typeof chrome !== "undefined") {
-    chrome.runtime.onMessage.addListener((message: any) => {
-      if (message?.type === "NEW_RESULT") {
-        applyResult(message.result);
-      }
-      return false;
-    });
+    chrome.runtime.onMessage.addListener(onMessage as RuntimeMessageHandler);
   }
 }
 
