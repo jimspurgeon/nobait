@@ -53,13 +53,45 @@ export const TIMING = {
 /** Glyph pool for the scramble — monospace-neutral symbols. */
 const GLYPHS = "!<>-_\\/[]{}—=+*^?#";
 
+// ---------------------------------------------------------------------------
+// Intensity control (P7 options: off/subtle/normal/full)
+// ---------------------------------------------------------------------------
+
+/** User-configurable animation intensity (mirrors options settings). */
+export type IntensitySetting = "off" | "subtle" | "normal" | "full";
+
+const INTENSITY_MULTIPLIER: Record<IntensitySetting, number> = {
+  off: 0,
+  subtle: 0.5,
+  normal: 1,
+  full: 1.25,
+};
+
+let intensitySetting: IntensitySetting = "normal";
+
+/**
+ * Set the user's animation intensity preference (P7 options page).
+ * `"off"` collapses all animations to instant swaps — same observable
+ * behavior as `prefers-reduced-motion`. Multipliers scale all durations.
+ */
+export function setAnimationIntensity(intensity: IntensitySetting): void {
+  intensitySetting = intensity;
+}
+
+/** Current intensity (test hook / diagnostics). */
+export function getAnimationIntensity(): IntensitySetting {
+  return intensitySetting;
+}
+
 /**
  * Resolve a duration for the given anim mode. `quick` scales to
  * ~60% of full; `instant` returns 0 (hard swap, reduced motion).
+ * Scaled by the user's intensity preference.
  */
 function durationFor(mode: AnimMode, full: number, quick: number): number {
   if (mode === "instant") return 0;
-  return mode === "quick" ? quick : full;
+  const base = mode === "quick" ? quick : full;
+  return Math.round(base * INTENSITY_MULTIPLIER[intensitySetting]);
 }
 
 // ---------------------------------------------------------------------------

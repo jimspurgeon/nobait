@@ -12,20 +12,16 @@ export interface BadgeSpec {
 }
 
 export const BADGE_SPECS: Record<StampTier, BadgeSpec> = {
-  [StampTier.LEGITIMATE]: { glyph: "✓", color: "#1a7f37", label: "Legitimate" },
+  [StampTier.LEGITIMATE]: { glyph: "✓", color: "#14803c", label: "Legitimate" },
   [StampTier.EXAGGERATED]: {
     glyph: "!",
-    color: "#8a6d00", // amber, ≥4.5:1 with white glyph (WCAG AA)
+    color: "#8a5a00",
     label: "Exaggerated",
   },
-  [StampTier.MISLEADING]: { glyph: "✗", color: "#cf222e", label: "Misleading" },
-  [StampTier.CLICKBAIT]: {
-    glyph: "🎣",
-    color: "#9a5b0a", // burnt orange, ≥4.5:1 with white glyph (WCAG AA)
-    label: "Clickbait",
-  },
-  [StampTier.FAKE]: { glyph: "☠", color: "#8b1d24", label: "Fake" },
-  [StampTier.UNSURE]: { glyph: "?", color: "#6e7781", label: "Unsure" },
+  [StampTier.MISLEADING]: { glyph: "✗", color: "#c42b1c", label: "Misleading" },
+  [StampTier.CLICKBAIT]: { glyph: "🎣", color: "#a16207", label: "Clickbait" },
+  [StampTier.FAKE]: { glyph: "☠", color: "#b52f3a", label: "Fake" },
+  [StampTier.UNSURE]: { glyph: "?", color: "#5c6a7a", label: "Unsure" },
 };
 
 /**

@@ -5,15 +5,16 @@
  */
 
 import { SELECTORS, extractVideoId } from "./dom";
-import { sendToBackground, MessageResponse } from "../utils/messages";
+import { sendToBackground, type MessageResponse } from "../utils/messages";
 import { StampTier, VALID_STAMP_TIERS } from "../stamps/types";
 import { buildBadge } from "../stamps/badges";
 import { attachTooltip } from "../stamps/tooltips";
 import { SpatObserver } from "./observer";
 import { ThumbnailSwapper } from "./thumb-swapper";
-import { loadSettings, type NobaitSettings } from "./settings";
+import { loadSettings, onSettingsChanged, type Settings } from "./settings";
 import { escapeDomText } from "./signals";
 import { webext } from "../utils/webext";
+import { setAnimationIntensity } from "./ui";
 import "../styles/base.css";
 
 console.info("[nobait] content script loading (stamps + thumbnails)...");
@@ -24,17 +25,25 @@ const seen = new Map<
   { titleEl: HTMLElement; stampHost: HTMLElement }
 >();
 
+/** Latest settings snapshot (live-updated via storage.onChanged). */
+let currentSettings: Settings | null = null;
+
 /** Fair scheduling for IntersectionObserver callbacks */
-// eslint-disable-next-line prefer-const -- cleared via .clear(), never reassigned
-let pendingCards = new Set<HTMLElement>();
+const pendingCards = new Set<HTMLElement>();
 let rafId: number | null = null;
 
 async function main(): Promise<void> {
-  const settings: NobaitSettings = await loadSettings();
+  let settings: Settings = await loadSettings();
+  currentSettings = settings;
+
+  // Apply animation intensity from settings (P7; "off" acts like reduced motion).
+  setAnimationIntensity(
+    settings.animations.enabled ? settings.animations.intensity : "off",
+  );
 
   // --- Thumbnail swap (P2) ---
   const swapper = new ThumbnailSwapper({
-    position: settings.thumbnailPosition,
+    position: settings.thumbnails.position,
     onDone: (id) => {
       if (settings.debug) console.debug("[nobait] thumbnail swapped:", id);
     },
@@ -52,12 +61,29 @@ async function main(): Promise<void> {
   observeNavigation();
   listenForResults();
 
+  // --- Live settings (P7): storage.onChanged → apply without reload ---
+  const unsubscribeSettings = onSettingsChanged((next) => {
+    currentSettings = next;
+    settings = next;
+    swapper.setPosition(next.thumbnails.position);
+    setAnimationIntensity(
+      next.animations.enabled ? next.animations.intensity : "off",
+    );
+    // Stamp visibility: hide/show all existing badge hosts.
+    document
+      .querySelectorAll<HTMLElement>(".nobait-stamp-host")
+      .forEach((host) => {
+        host.style.display = next.stamps.visible ? "" : "none";
+      });
+  });
+
   // Diagnostics hook (see AGENTS.md debugging tips).
   window.addEventListener("nobait:debug", () => {
     console.debug("[nobait] settings:", settings);
   });
 
   window.addEventListener("pagehide", () => {
+    unsubscribeSettings();
     observer.stop();
     swapper.dispose();
   });
@@ -98,6 +124,12 @@ async function processTitle(titleEl: HTMLElement): Promise<void> {
   stampHost.style.cssText =
     "display:inline-flex;align-items:center;margin-left:6px;vertical-align:middle;";
   titleEl.parentElement?.insertBefore(stampHost, titleEl.nextSibling);
+
+  // Hide immediately if stamps are disabled in settings
+  const cfg = currentSettings ?? (await loadSettings());
+  if (!cfg.stamps.visible) {
+    stampHost.style.display = "none";
+  }
 
   seen.set(videoId, { titleEl, stampHost });
 
@@ -231,6 +263,14 @@ function applyStamp(
   // Clean any existing
   host.innerHTML = "";
   host._nobaitTooltipCleanup?.();
+
+  // Hide if the master toggle is off or this tier is disabled.
+  const cfg = currentSettings;
+  if (cfg && (!cfg.stamps.visible || !cfg.stamps.tiers[result.stamp])) {
+    host.style.display = "none";
+    return;
+  }
+  host.style.display = "";
 
   const badge = buildBadge(result.stamp, result.stampExplanation);
   host.appendChild(badge);
