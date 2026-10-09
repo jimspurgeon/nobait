@@ -26,6 +26,7 @@ const seen = new Map<
 >();
 
 /** Fair scheduling for IntersectionObserver callbacks */
+// eslint-disable-next-line prefer-const -- cleared via .clear(), never reassigned
 let pendingCards = new Set<HTMLElement>();
 let rafId: number | null = null;
 

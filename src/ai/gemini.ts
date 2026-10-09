@@ -207,10 +207,14 @@ export class GeminiProvider implements AIProvider {
       const streamParser = new IncrementalResultParser(onPartialResult);
       const decoder = new TextDecoder();
 
-      while (true) {
+      let reading = true;
+      while (reading) {
         const { value, done } = await reader.read();
-        if (done) break;
-        streamParser.append(decoder.decode(value, { stream: true }));
+        if (done) {
+          reading = false;
+        } else {
+          streamParser.append(decoder.decode(value, { stream: true }));
+        }
       }
       streamParser.finish();
 
@@ -388,7 +392,7 @@ export class IncrementalResultParser {
 
     if (this.results.length === 0) {
       // Fallback: try to parse the whole accumulated buffer as complete JSON
-      let jsonStr = this.buffer
+      const jsonStr = this.buffer
         .trim()
         .replace(/^```json\s*/i, "")
         .replace(/\s*```$/i, "");
