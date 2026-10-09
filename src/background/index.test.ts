@@ -33,7 +33,8 @@ vi.mock("../ai/factory", () => ({
   },
 }));
 vi.mock("../ai/gemini", () => ({
-  GeminiProvider: class {},
+  // eslint-disable-next-line @typescript-eslint/no-extraneous-class -- placeholder mock for instanceof checks
+  GeminiProvider: class MockGeminiProvider {},
 }));
 vi.mock("./factcheck", () => ({
   evaluateFactCheck: vi.fn().mockResolvedValue({ result: null }),

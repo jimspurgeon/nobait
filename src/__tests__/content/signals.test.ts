@@ -15,9 +15,7 @@ describe("escapeDomText", () => {
   });
 
   it("strips control characters and collapses whitespace", () => {
-    expect(escapeDomText("a\u0000b\u0007c\u007fd\u0001\u0002")).toBe(
-      "a b c d",
-    );
+    expect(escapeDomText("a\u0000b\u0007c\u007fd\u0001\u0002")).toBe("a b c d");
     expect(escapeDomText("hello    \n\t world")).toBe("hello world");
   });
 
