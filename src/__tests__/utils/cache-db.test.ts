@@ -25,7 +25,7 @@ class FakeIDB {
       openCursor: () => makeIDBRequest(null),
     });
 
-    const self = this;
+    const self = this; // eslint-disable-line @typescript-eslint/no-this-alias -- shared across objectStore closures
     return {
       transaction: (storeName: string, _mode?: IDBTransactionMode) => ({
         objectStore: () =>

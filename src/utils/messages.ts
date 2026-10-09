@@ -2,6 +2,8 @@
  * Message protocol between content script and background worker
  */
 
+import { webext } from "./webext";
+
 /** Message types sent from content script to background */
 export type ContentToBackgroundMessage =
   | {
@@ -41,42 +43,20 @@ export interface MessageResponse<T = unknown> {
 }
 
 /**
- * Send a message to the background worker (from content script)
+ * Send a message to the background worker (from content script).
+ *
+ * The background listener returns Promises (Firefox-native
+ * OnMessageListenerAsync pattern), so `sendMessage` resolves with the
+ * listener's resolved value directly — no sendResponse callback round
+ * trip, identical shape on Firefox and Chrome.
  */
 export async function sendToBackground<T>(
   message: ContentToBackgroundMessage,
 ): Promise<MessageResponse<T>> {
-  const api =
-    typeof browser !== "undefined"
-      ? browser
-      : typeof chrome !== "undefined"
-        ? chrome
-        : null;
-  if (!api?.runtime?.sendMessage) {
+  const runtimeApi = webext.runtime;
+  if (!runtimeApi?.sendMessage) {
     throw new Error("[nobait] No runtime message API available");
   }
 
-  if (typeof browser !== "undefined") {
-    return await browser.runtime.sendMessage(message);
-  } else {
-    return await new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage(message, (response: MessageResponse<T>) =>
-        handleCallbackResponse(response, resolve, reject),
-      );
-    });
-  }
-}
-
-function handleCallbackResponse<T>(
-  response: MessageResponse<T> | null,
-  resolve: (v: MessageResponse<T>) => void,
-  reject: (e: Error) => void,
-): void {
-  if (chrome.runtime.lastError) {
-    reject(new Error(chrome.runtime.lastError.message));
-  } else {
-    resolve(
-      response || { success: false, error: "No response from background" },
-    );
-  }
+  return (await runtimeApi.sendMessage(message)) as MessageResponse<T>;
 }

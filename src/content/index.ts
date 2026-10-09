@@ -12,10 +12,9 @@ import { attachTooltip } from "../stamps/tooltips";
 import { SpatObserver } from "./observer";
 import { ThumbnailSwapper } from "./thumb-swapper";
 import { loadSettings, type NobaitSettings } from "./settings";
+import { escapeDomText } from "./signals";
+import { webext } from "../utils/webext";
 import "../styles/base.css";
-
-declare const browser: any;
-declare const chrome: any;
 
 console.info("[nobait] content script loading (stamps + thumbnails)...");
 
@@ -26,6 +25,7 @@ const seen = new Map<
 >();
 
 /** Fair scheduling for IntersectionObserver callbacks */
+// eslint-disable-next-line prefer-const -- cleared via .clear(), never reassigned
 let pendingCards = new Set<HTMLElement>();
 let rafId: number | null = null;
 
@@ -85,7 +85,7 @@ async function processTitle(titleEl: HTMLElement): Promise<void> {
   const videoId = extractVideoId(
     href.startsWith("/") ? `https://www.youtube.com${href}` : href,
   );
-  const title = (titleEl.textContent || "").trim();
+  const title = escapeDomText(titleEl.textContent || "");
 
   if (!videoId || !title) return;
 
@@ -180,29 +180,19 @@ function observeNavigation(): void {
  * Listen for streamed results from background
  */
 function listenForResults(): void {
-  const api =
-    typeof browser !== "undefined"
-      ? browser
-      : typeof chrome !== "undefined"
-        ? chrome
-        : null;
-  if (!api?.runtime?.onMessage) return;
+  const runtimeApi = webext.runtime;
+  if (!runtimeApi?.onMessage) return;
 
-  if (typeof browser !== "undefined") {
-    browser.runtime.onMessage.addListener((message: any) => {
-      if (message?.type === "NEW_RESULT") {
-        applyResult(message.result);
-      }
-      return false;
-    });
-  } else if (typeof chrome !== "undefined") {
-    chrome.runtime.onMessage.addListener((message: any) => {
-      if (message?.type === "NEW_RESULT") {
-        applyResult(message.result);
-      }
-      return false;
-    });
-  }
+  runtimeApi.onMessage.addListener((rawMessage: unknown) => {
+    const message = rawMessage as {
+      type?: string;
+      result?: Parameters<typeof applyResult>[0];
+    };
+    if (message?.type === "NEW_RESULT" && message.result) {
+      applyResult(message.result);
+    }
+    return false;
+  });
 }
 
 /**
