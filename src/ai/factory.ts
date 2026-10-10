@@ -223,6 +223,7 @@ export class AIProviderFactory {
       config.geminiApiKey ?? "",
       config.ollamaUrl ?? "",
       config.ollamaModel ?? "",
+      config.builtinModel ?? "",
       config.useChromeAI !== false,
     ]);
     if (this.provider && this.configKey === configKey) {

@@ -270,7 +270,7 @@ export function normalizeSettings(raw: unknown): Settings {
       ollamaModel: asString(ai["ollamaModel"], ""),
       builtinModel: asEnum(
         ai["builtinModel"],
-        ["qwen2.5-0.5b", "smollm2-360m", "stories15m"] as const,
+        ["qwen2.5-0.5b", "smollm2-360m", "smollm2-135m"] as const,
         DEFAULT_SETTINGS.ai.builtinModel,
       ),
     },

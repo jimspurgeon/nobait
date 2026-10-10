@@ -23,6 +23,7 @@ export type WebExtMessageListener = (
 
 export interface WebExtRuntime {
   sendMessage(message: unknown): PromiseLike<unknown>;
+  getURL(path: string): string;
   onMessage: {
     addListener(cb: WebExtMessageListener): void;
   };

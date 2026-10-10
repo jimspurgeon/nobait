@@ -102,8 +102,13 @@ async function main(): Promise<void> {
   });
 
   // E2E/diagnostics relay: lets a page script drive one background round
-  // trip (or a settings write) and reflect the response back via
-  // `nobait:e2e-result`. Used by e2e/ondevice_smoke.py.
+  // trip (or a settings write) and reflect the response back. Used by
+  // e2e/ondevice_smoke.py. Note: the response is ALSO written to the
+  // `data-nobait-e2e-result` attribute on <html> because CustomEvent
+  // details dispatched from a content script are Xray-opaque to
+  // privileged page script (Marionette/WebDriver) — DOM attributes are
+  // visible across worlds. The custom event is kept for same-world
+  // consumers.
   window.addEventListener("nobait:e2e", (ev) => {
     const detail = (ev as CustomEvent).detail as {
       message?: { type: string; [k: string]: unknown };
@@ -115,13 +120,18 @@ async function main(): Promise<void> {
         if (detail?.setSettings) {
           const storage = webext.storage?.local;
           if (!storage) throw new Error("storage API unavailable");
+          // Must use SETTINGS_KEY ("nobait:settings"), not "settings":
+          // the settings module (and its storage.onChanged listener) only
+          // ever looks at that key.
+          const SETTINGS_KEY = "nobait:settings";
           const cur =
-            ((await storage.get("settings")) as Record<string, unknown>) ?? {};
+            ((await storage.get(SETTINGS_KEY)) as Record<string, unknown>) ??
+            {};
           const next = {
-            ...(cur["settings"] as Record<string, unknown> | undefined),
+            ...(cur[SETTINGS_KEY] as Record<string, unknown> | undefined),
             ...detail.setSettings,
           };
-          await storage.set({ settings: next });
+          await storage.set({ [SETTINGS_KEY]: next });
           response = { success: true };
         } else if (detail?.message) {
           response = await sendToBackground(
@@ -133,6 +143,12 @@ async function main(): Promise<void> {
       } catch (e) {
         response = { success: false, error: String(e) };
       }
+      document.documentElement.setAttribute(
+        "data-nobait-e2e-result",
+        JSON.stringify(response, (_k, v) =>
+          typeof v === "bigint" ? String(v) : v,
+        ),
+      );
       window.dispatchEvent(
         new CustomEvent("nobait:e2e-result", { detail: response }),
       );

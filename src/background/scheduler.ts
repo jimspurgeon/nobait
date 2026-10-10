@@ -124,7 +124,11 @@ export class EvaluationScheduler {
     const handledVideoIds = new Set<string>();
 
     try {
-      const provider = await aiProviderFactory.initialize({});
+      // Reuse the background-applied provider; initialize({}) would reset to
+      // defaults and silently swap e.g. builtin/smollm2-135m back to qwen.
+      const provider =
+        aiProviderFactory.getProvider() ??
+        (await aiProviderFactory.initialize({}));
 
       // Chunk into groups of 20. The canonical AIProvider interface (P4)
       // yields AnalysisResults incrementally via an async iterable; each

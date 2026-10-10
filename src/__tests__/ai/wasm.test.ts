@@ -40,9 +40,17 @@ function makeWllama(
         opts.onLoad?.();
       },
     ),
-    createChatCompletion: vi.fn(async (msgs) =>
-      opts.reply ? opts.reply(msgs) : "[]",
+    // Real wllama shape: single options object, response parsed JSON
+    // with .content — mirrored here so the stub can't drift from prod.
+    createChatCompletion: vi.fn(
+      async (options: {
+        messages: Array<{ role: string; content: string }>;
+      }) =>
+        opts.reply
+          ? { content: opts.reply(options.messages) }
+          : { content: "[]" },
     ),
+    createCompletion: vi.fn(async () => ({ content: "[]" })),
     exit: vi.fn(async () => {}),
   };
 }
@@ -166,12 +174,40 @@ describe("WasmProvider", () => {
     await expect(iter.next()).rejects.toThrow(/JSPI|memory64/);
   });
 
+  test("falls back to raw completion for base models (no chat template)", async () => {
+    // Chat completion throws (base models carry no tokenizer.chat_template);
+    // the provider must retry the chunk with createCompletion.
+    const chatErr = new Error("no chat template");
+    const wllama: WllamaLike = {
+      loadModelFromUrl: vi.fn(async () => {}),
+      createChatCompletion: vi.fn(async () => {
+        throw chatErr;
+      }),
+      createCompletion: vi.fn(
+        async () => ({ content: modelJson(["fb"]) }) as unknown,
+      ),
+      exit: vi.fn(async () => {}),
+    };
+    const p = new WasmProvider({
+      loader: async () => wllama,
+      runtimeSupported: true,
+    });
+    const out = [];
+    for await (const r of p.analyzeBatch([signal("fb", "t")])) out.push(r);
+    expect(wllama.createCompletion).toHaveBeenCalledTimes(1);
+    const opts = (wllama.createCompletion as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[0] as { prompt: string } | undefined;
+    expect(opts?.prompt).toContain("### Assistant:");
+    expect(out[0]?.videoId).toBe("fb");
+  });
+
   test("load failure rejects with model URL in message", async () => {
     const wllama: WllamaLike = {
       loadModelFromUrl: vi.fn(async () => {
         throw new Error("network down");
       }),
-      createChatCompletion: vi.fn(async () => "[]"),
+      createChatCompletion: vi.fn(async () => ({ content: "[]" })),
+      createCompletion: vi.fn(async () => ({ content: "[]" })),
       exit: vi.fn(async () => {}),
     };
     const p = new WasmProvider({

@@ -24,21 +24,37 @@ import {
 } from "./classify.js";
 import type { VideoSignal } from "../content/signals.js";
 import { StampTier } from "../stamps/types.js";
+import { webext } from "../utils/webext.js";
 
 /**
  * Shape of the vendored Wllama class we rely on. Structural so tests can
  * stub the loader without the real ~400KB module.
  */
 export interface WllamaLike {
+  /** wllama 3.x accepts a single URL; shard-splits are auto-expanded. */
   loadModelFromUrl(
-    urls: string[],
+    url: string | string[],
     config: Record<string, unknown>,
   ): Promise<void>;
-  createChatCompletion(
-    messages: Array<{ role: string; content: string }>,
-    options?: Record<string, unknown>,
-  ): Promise<string>;
+  /** Single options object (messages inside); resolves to the parsed
+   * llama.cpp response JSON — text lives in `.content`, not a string. */
+  createChatCompletion(options: {
+    messages: Array<{ role: string; content: string }>;
+    [k: string]: unknown;
+  }): Promise<unknown>;
+  /** Raw text completion — fallback for base models with no chat template. */
+  createCompletion(options: {
+    prompt: string;
+    [k: string]: unknown;
+  }): Promise<unknown>;
   exit(): Promise<void>;
+}
+
+/** Pull the generated text out of a llama.cpp completion response. */
+function extractText(result: unknown): string {
+  if (typeof result === "string") return result;
+  const content = (result as { content?: unknown } | null)?.content;
+  return typeof content === "string" ? content : "";
 }
 
 /** Injectable loader — production wires the vendored wllama module. */
@@ -76,10 +92,10 @@ export const BUILTIN_MODELS = {
       "https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct-GGUF/resolve/main/smollm2-360m-instruct-q8_0.gguf",
     ],
   },
-  stories15m: {
-    label: "TinyLlama stories 15M (test-only, ~19 MB)",
+  "smollm2-135m": {
+    label: "SmolLM2 135M Instruct (small, ~88 MB)",
     urls: [
-      "https://huggingface.co/ggml-org/models/resolve/main/tinyllamas/stories15M-q4_0.gguf",
+      "https://huggingface.co/unsloth/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q2_K.gguf",
     ],
   },
 } as const;
@@ -142,9 +158,25 @@ export function isWasmRuntimeSupported(): boolean {
  */
 async function defaultLoader(): Promise<WllamaLike> {
   const mod = (await import("@wllama/wllama")) as unknown as {
-    Wllama: new (cfg: Record<string, unknown>) => WllamaLike;
+    Wllama: new (
+      pathConfig: Record<string, string>,
+      wllamaConfig?: Record<string, unknown>,
+    ) => WllamaLike;
   };
-  return new mod.Wllama({});
+  // First constructor arg is pathConfig, NOT wllamaConfig. Its "default"
+  // entry is the wasm binary URL that getWorkerResources() fetches and
+  // writes into the worker's MEMFS — omit it and loadModel() rejects
+  // with '"default" is missing from pathConfig'. Point it at the copy
+  // packaged next to our static workers (see scripts/build.mjs).
+  const runtime = webext.runtime;
+  if (!runtime?.getURL) {
+    throw new Error(
+      "builtin WASM AI unavailable: browser.runtime.getURL not found",
+    );
+  }
+  return new mod.Wllama({
+    default: runtime.getURL("wllama.wasm"),
+  });
 }
 
 export class WasmProvider implements AIProvider {
@@ -199,9 +231,15 @@ export class WasmProvider implements AIProvider {
     this.loading = (async () => {
       const wllama = await this.loader();
       try {
-        await wllama.loadModelFromUrl(this.modelUrls, {
+        // wllama 3.x: single URL string — an array is treated as a source
+        // object ({url: undefined}) and rejected as "Invalid model URL".
+        // n_parallel: 1 — we complete serially; the default 4 splits the
+        // KV cache across slots (tiny models: 512 train ctx ÷ 4 = 128
+        // usable tokens → "request exceeds the available context size").
+        await wllama.loadModelFromUrl(this.modelUrls[0] ?? "", {
           n_ctx: 4096,
           n_threads: 1,
+          n_parallel: 1,
           parallelDownloads: 1,
           ...(this.onProgress ? { progressCallback: this.onProgress } : {}),
         });
@@ -227,21 +265,28 @@ export class WasmProvider implements AIProvider {
 
     for (const chunk of chunks) {
       try {
-        const systemMsg = {
-          role: "system" as const,
-          content: CLASSIFY_SYSTEM_PROMPT,
-        };
-        const userMsg = {
-          role: "user" as const,
-          content: buildBatchUserPrompt(chunk),
-        };
-        const completion = await wllama.createChatCompletion(
-          [systemMsg, userMsg],
-          {
-            max_tokens: this.maxTokens,
-            temperature: 0.3,
-          },
-        );
+        const prompt = [
+          { role: "system", content: CLASSIFY_SYSTEM_PROMPT },
+          { role: "user", content: buildBatchUserPrompt(chunk) },
+        ];
+        const genOpts = { max_tokens: this.maxTokens, temperature: 0.3 };
+        // Preferred: chat completion (models with a chat template).
+        // Fallback: raw completion — base models (no chat template in the
+        // GGUF) make wllama throw on chat-formatted messages; retry with a
+        // plain prompt so custom/user-supplied base models still work.
+        let completion: string;
+        try {
+          completion = extractText(
+            await wllama.createChatCompletion({ messages: prompt, ...genOpts }),
+          );
+        } catch {
+          completion = extractText(
+            await wllama.createCompletion({
+              prompt: buildRawCompletionPrompt(prompt),
+              ...genOpts,
+            }),
+          );
+        }
         yield* parseBatchResponse(completion, chunk);
       } catch (err) {
         console.error("[nobait:wasm] chunk analysis failed:", err);
@@ -277,4 +322,28 @@ export function getWasmStatus(): WasmStatus {
     runtimeSupported: isWasmRuntimeSupported(),
     models: BUILTIN_MODELS,
   };
+}
+
+/**
+ * Format system/user messages as raw text for base-model completion.
+ * Mirrors what a chat template would produce; tuned for Qwen/SmolLM2.
+ */
+function buildRawCompletionPrompt(
+  messages: Array<{ role: string; content: string }>,
+): string {
+  // Base models have no chat template; use a generic Qwen-style format.
+  // Fallback if roles are unknown.
+  return (
+    messages
+      .map((m) => {
+        const role = m.role.toLowerCase();
+        const text = m.content;
+        if (role === "system") return `### System:\n${text}`;
+        if (role === "user") return `### User:\n${text}`;
+        if (role === "assistant") return `### Assistant:\n${text}`;
+        // Unknown role — emit raw text with a delimiter.
+        return text;
+      })
+      .join("\n\n") + "\n### Assistant:\n"
+  );
 }
