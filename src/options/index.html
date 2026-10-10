@@ -38,11 +38,12 @@
           <label for="backend">Provider</label>
           <select id="backend" name="backend">
             <option value="auto" selected>
-              Auto (Chrome → Gemini → Ollama)
+              Auto (Chrome → Gemini → Ollama → Built-in)
             </option>
             <option value="chrome">Chrome built-in AI (Gemini Nano)</option>
             <option value="gemini">Gemini (Google AI Studio)</option>
             <option value="ollama">Ollama / Local server</option>
+            <option value="builtin">Built-in on-device AI (no config needed)</option>
           </select>
           <p class="hint">
             Auto follows the priority chain: Chrome Prompt API (if available) →

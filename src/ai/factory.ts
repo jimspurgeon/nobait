@@ -6,7 +6,8 @@
  *   1. Chrome built-in AI if available
  *   2. Gemini if an API key is set
  *   3. Ollama if a local URL is configured
- *   4. Otherwise → disabled (console warning, null returned)
+ *   4. Built-in on-device WASM (wllama) if the runtime supports it
+ *   5. Otherwise → disabled (console warning, null returned)
  *
  * To avoid a hard dependency on the Gemini module (built by a parallel
  * worker, P3), this factory accepts the Gemini provider via a lazy loader
@@ -16,6 +17,7 @@
 
 import { NanoProvider } from "./nano.js";
 import { OllamaProvider } from "./ollama.js";
+import { WasmProvider, isWasmRuntimeSupported } from "./wasm.js";
 import type { AIProvider } from "./types.js";
 
 /** Config the options page feeds into the factory. */
@@ -33,6 +35,13 @@ export interface AIProviderConfig {
    * point (avoids coupling this module to a parallel-workstream file).
    */
   createGeminiProvider?: (apiKey: string, timeoutMs?: number) => AIProvider;
+  /**
+   * Optional lazy WASM-provider loader (same injection pattern). When
+   * absent the chain skips the built-in backend gracefully.
+   */
+  createWasmProvider?: () => AIProvider;
+  /** Suppress the Chrome builtin step (used when the user pinned builtin). */
+  skipChromeBuiltin?: boolean;
 }
 
 /** Which provider the factory selected — used by the options UI badge. */
@@ -61,7 +70,7 @@ export function createProvider(config: AIProviderConfig): ProviderSelection {
   // -- 1. Chrome built-in AI ------------------------------------------------
   // NanoProvider self-detects; if the API is missing (Firefox), it operates
   // as a stub that reports UNSURE, which we treat as "not selectable" here.
-  if (isChromeBuiltinAvailable()) {
+  if (!config.skipChromeBuiltin && isChromeBuiltinAvailable()) {
     return {
       provider: new NanoProvider({ timeoutMs: config.timeoutMs }),
       reason: "chrome-builtin AI (Gemini Nano) detected",
@@ -112,7 +121,22 @@ export function createProvider(config: AIProviderConfig): ProviderSelection {
     };
   }
 
-  // -- 4. Disabled -----------------------------------------------------------
+  // -- 4. Built-in on-device WASM (zero-config last resort) -------------------
+  if (config.createWasmProvider !== undefined) {
+    try {
+      return {
+        provider: config.createWasmProvider(),
+        reason: "built-in on-device AI (wllama)",
+      };
+    } catch (cause) {
+      console.warn(
+        "[nobait] WASM provider construction failed, falling through",
+        cause,
+      );
+    }
+  }
+
+  // -- 5. Disabled -----------------------------------------------------------
   console.warn(
     "[nobait] No AI provider available — title rewriting disabled. " +
       "Configure Chrome built-in AI, a Gemini key, or a local Ollama URL in options.",
@@ -142,7 +166,7 @@ export class AIProviderFactory {
   private configKey: string | null = null;
   /** Last fully-applied config (preserves autodetected Ollama across calls). */
   private lastAppliedConfig: {
-    preferredProvider?: "gemini" | "ollama" | "chrome";
+    preferredProvider?: "gemini" | "ollama" | "chrome" | "builtin";
     geminiApiKey?: string;
     ollamaUrl?: string;
     ollamaModel?: string;
@@ -165,10 +189,11 @@ export class AIProviderFactory {
    * chain to the chosen backend by suppressing the others' credentials
    * ("gemini" ignores the Ollama URL, "ollama" ignores the Gemini key).
    * `undefined`/"auto" follows the full chain. `ollamaModel` supplies the
-   * model tag required for the local endpoint.
+   * model tag required for the local endpoint. "builtin" pins the
+   * zero-config on-device WASM backend.
    */
   async initialize(config: {
-    preferredProvider?: "gemini" | "ollama" | "chrome";
+    preferredProvider?: "gemini" | "ollama" | "chrome" | "builtin";
     geminiApiKey?: string;
     ollamaUrl?: string;
     ollamaModel?: string;
@@ -203,10 +228,16 @@ export class AIProviderFactory {
     this.lastAppliedConfig = { ...config };
 
     const selection = createProvider({
-      geminiApiKey: prefer === "ollama" ? undefined : config.geminiApiKey,
-      ollamaBaseUrl: prefer === "gemini" ? undefined : config.ollamaUrl,
+      geminiApiKey: prefer === "ollama" || prefer === "builtin" ? undefined : config.geminiApiKey,
+      ollamaBaseUrl: prefer === "gemini" || prefer === "builtin" ? undefined : config.ollamaUrl,
       ollamaModel: config.ollamaModel,
       createGeminiProvider: (apiKey) => new GeminiProvider(apiKey),
+      // The WASM step is only offered when the runtime can actually run
+      // it; unsupported browsers keep the legacy Gemini-storage fallback.
+      createWasmProvider: isWasmRuntimeSupported()
+        ? () => new WasmProvider({})
+        : undefined,
+      skipChromeBuiltin: prefer === "builtin",
     });
 
     if (selection.provider === null) {
@@ -222,6 +253,9 @@ export class AIProviderFactory {
       }
       this.provider = gemini;
       this.currentProviderName = "gemini";
+    } else if (prefer === "builtin" && selection.provider instanceof WasmProvider) {
+      this.provider = selection.provider;
+      this.currentProviderName = "builtin";
     } else {
       this.provider = selection.provider;
       this.currentProviderName = prefer ?? selection.reason;

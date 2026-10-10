@@ -32,6 +32,8 @@
     "@types/webextension-polyfill": "^0.12.6",
     "@typescript-eslint/eslint-plugin": "^8.12.0",
     "@typescript-eslint/parser": "^8.12.0",
+    "@wllama/wllama": "^3.8.1",
+    "@wllama/wllama-compat": "^3.8.1",
     "cross-env": "^10.1.0",
     "eslint": "^9.39.0",
     "eslint-config-prettier": "^10.1.8",

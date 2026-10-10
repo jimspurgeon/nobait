@@ -23,7 +23,7 @@ export type ThumbPositionKind =
   "start" | "middle" | "end" | "random" | "percent";
 
 /** Which AI provider to use. `auto` follows the factory priority chain. */
-export type BackendPreference = "auto" | "chrome" | "gemini" | "ollama";
+export type BackendPreference = "auto" | "chrome" | "gemini" | "ollama" | "builtin";
 
 /** Placement of stamp badges relative to the video title. */
 export type StampPlacement = "after-title" | "before-title";
@@ -257,7 +257,7 @@ export function normalizeSettings(raw: unknown): Settings {
     ai: {
       backend: asEnum(
         ai["backend"],
-        ["auto", "chrome", "gemini", "ollama"],
+        ["auto", "chrome", "gemini", "ollama", "builtin"],
         DEFAULT_SETTINGS.ai.backend,
       ),
       geminiApiKey: asString(ai["geminiApiKey"], ""),
