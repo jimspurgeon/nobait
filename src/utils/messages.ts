@@ -72,7 +72,9 @@ export async function sendToBackground<T>(
   let keepaliveInterval: ReturnType<typeof setInterval> | null = null;
   if (message.type === "EVALUATE_VIDEO") {
     keepaliveInterval = setInterval(() => {
-      void Promise.resolve(runtimeApi.sendMessage({ type: "KEEPALIVE_PING" })).catch(() => {
+      void Promise.resolve(
+        runtimeApi.sendMessage({ type: "KEEPALIVE_PING" }),
+      ).catch(() => {
         /* background may be shutting down — fine */
       });
     }, 10_000);

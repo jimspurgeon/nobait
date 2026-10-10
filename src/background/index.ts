@@ -430,7 +430,6 @@ class BackgroundWorker {
       });
     }
   }
-
 }
 
 // Initialize on service worker startup
