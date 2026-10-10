@@ -25,49 +25,58 @@ class BackgroundWorker {
   private initialized = false;
   /** Human-readable name of the active provider, for the options UI. */
   private activeProvider: string | null = null;
+  /** Init failure reason, surfaced through GET_PROVIDER_STATUS. */
+  private initError: string | null = null;
 
   async init(): Promise<void> {
     if (this.initialized) return;
 
     console.log("[nobait] Initializing background worker...");
 
-    // Broadcast built-in model download progress to the options page.
-    setWasmDownloadProgressSink(({ loaded, total }) => {
-      const runtimeApi = webext.runtime;
-      if (!runtimeApi) return;
-      void Promise.resolve(
-        runtimeApi.sendMessage({
-          type: "MODEL_DOWNLOAD_PROGRESS",
-          loaded,
-          total,
-        }),
-      ).catch(() => {
-        /* no listener (options page closed) — fine */
+    try {
+      // Broadcast built-in model download progress to the options page.
+      setWasmDownloadProgressSink(({ loaded, total }) => {
+        const runtimeApi = webext.runtime;
+        if (!runtimeApi) return;
+        void Promise.resolve(
+          runtimeApi.sendMessage({
+            type: "MODEL_DOWNLOAD_PROGRESS",
+            loaded,
+            total,
+          }),
+        ).catch(() => {
+          /* no listener (options page closed) — fine */
+        });
       });
-    });
 
-    // Register the message handler FIRST — a slow Ollama autodetect probe
-    // (or any future init step) must never delay responsiveness to
-    // content scripts.
-    this.setupMessageHandler();
+      // Register the message handler FIRST — a slow Ollama autodetect probe
+      // (or any future init step) must never delay responsiveness to
+      // content scripts.
+      this.setupMessageHandler();
 
-    // Initialize cache database
-    await cacheDB.init();
+      // Initialize cache database
+      await cacheDB.init();
 
-    // Initialize AI provider factory from unified settings
-    const settings = await getSettings();
-    await this.applyAiSettings(settings);
+      // Initialize AI provider factory from unified settings
+      const settings = await getSettings();
+      await this.applyAiSettings(settings);
 
-    // Live settings: re-initialize the provider when AI config changes.
-    onSettingsChanged((next) => {
-      void this.applyAiSettings(next);
-    });
+      // Live settings: re-initialize the provider when AI config changes.
+      onSettingsChanged((next) => {
+        void this.applyAiSettings(next);
+      });
 
-    // Periodic cleanup (hourly)
-    setInterval(() => cacheDB.cleanup().catch(console.error), 60 * 60 * 1000);
+      // Periodic cleanup (hourly)
+      setInterval(() => cacheDB.cleanup().catch(console.error), 60 * 60 * 1000);
 
-    this.initialized = true;
-    console.log("[nobait] Background worker initialized");
+      this.initialized = true;
+      console.log("[nobait] Background worker initialized");
+    } catch (err) {
+      // Surface the failure through GET_PROVIDER_STATUS instead of leaving
+      // content scripts to wonder why EVALUATE_VIDEO silently does nothing.
+      this.initError = String(err);
+      console.error("[nobait] Failed to initialize background worker:", err);
+    }
   }
 
   /**
@@ -133,6 +142,7 @@ class BackgroundWorker {
             success: true,
             provider: this.activeProvider,
             detectedLocal: this.detectedLocal,
+            initError: this.initError,
           });
 
         case "GET_WASM_STATUS":
@@ -406,8 +416,11 @@ class BackgroundWorker {
 
 // Initialize on service worker startup
 const worker = new BackgroundWorker();
-void worker.init().catch((err) => {
-  console.error("[nobait] Failed to initialize background worker:", err);
+worker.init().catch((err) => {
+  // init() already captures the error internally for GET_PROVIDER_STATUS;
+  // this outer catch only guards against errors thrown before the internal
+  // try block begins (e.g. constructing the download-progress sink).
+  console.error("[nobait] Background worker init promise rejected:", err);
 });
 
 export default worker;
