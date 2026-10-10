@@ -28,14 +28,18 @@ function modelJson(ids: string[]): string {
   );
 }
 
-function makeWllama(opts: {
-  reply?: (msgs: Array<{ role: string; content: string }>) => string;
-  onLoad?: () => void;
-} = {}): WllamaLike {
+function makeWllama(
+  opts: {
+    reply?: (msgs: Array<{ role: string; content: string }>) => string;
+    onLoad?: () => void;
+  } = {},
+): WllamaLike {
   return {
-    loadModelFromUrl: vi.fn(async (_u: string[], _c: Record<string, unknown>) => {
-      opts.onLoad?.();
-    }),
+    loadModelFromUrl: vi.fn(
+      async (_u: string[], _c: Record<string, unknown>) => {
+        opts.onLoad?.();
+      },
+    ),
     createChatCompletion: vi.fn(async (msgs) =>
       opts.reply ? opts.reply(msgs) : "[]",
     ),
@@ -60,7 +64,12 @@ describe("WasmProvider", () => {
   });
 
   test("analyzeBatch yields parsed results per chunk", async () => {
-    const batch = [signal("a", "t"), signal("b", "t"), signal("c", "t"), signal("d", "t")];
+    const batch = [
+      signal("a", "t"),
+      signal("b", "t"),
+      signal("c", "t"),
+      signal("d", "t"),
+    ];
     let call = 0;
     const wllama = makeWllama({
       reply: (msgs) => {
@@ -97,7 +106,9 @@ describe("WasmProvider", () => {
       loader: async () => wllama,
       runtimeSupported: true,
     });
-    const batch = Array.from({ length: 10 }, (_, i) => signal(`v${i}`, `t${i}`));
+    const batch = Array.from({ length: 10 }, (_, i) =>
+      signal(`v${i}`, `t${i}`),
+    );
     const out = [];
     for await (const r of p.analyzeBatch(batch)) out.push(r);
     expect(out).toHaveLength(10);
@@ -119,7 +130,12 @@ describe("WasmProvider", () => {
       loader: async () => wllama,
       runtimeSupported: true,
     });
-    const batch = [signal("a", "A"), signal("b", "B"), signal("c", "C"), signal("d", "D")];
+    const batch = [
+      signal("a", "A"),
+      signal("b", "B"),
+      signal("c", "C"),
+      signal("d", "D"),
+    ];
     const out = [];
     for await (const r of p.analyzeBatch(batch)) out.push(r);
     expect(out[0]!.stamp).toBe(StampTier.UNSURE);

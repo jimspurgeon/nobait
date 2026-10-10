@@ -6,7 +6,9 @@ import { describe, it, expect } from "vitest";
 import { detectOllama } from "../../ai/autodetect";
 
 /** Build a stub fetch answering /api/tags with a canned catalog. */
-function tagsFetch(models: Array<{ name: string; size?: number }>): typeof fetch {
+function tagsFetch(
+  models: Array<{ name: string; size?: number }>,
+): typeof fetch {
   return (async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url.endsWith("/api/tags")) {

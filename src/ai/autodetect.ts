@@ -43,8 +43,18 @@ function modelRank(name: string): number {
     if (s && lower.startsWith(s.split(":")[0] ?? "")) return 10 + i;
   }
   // Generic chat models next.
-  if (lower.includes("llama") || lower.includes("qwen") || lower.includes("mistral")) return 100;
-  if (lower.includes("gemma") || lower.includes("phi") || lower.includes("smol")) return 110;
+  if (
+    lower.includes("llama") ||
+    lower.includes("qwen") ||
+    lower.includes("mistral")
+  )
+    return 100;
+  if (
+    lower.includes("gemma") ||
+    lower.includes("phi") ||
+    lower.includes("smol")
+  )
+    return 110;
   // Embeddings / code models are useless for this task.
   if (lower.includes("embed")) return 1000;
   if (lower.includes("code")) return 900;
@@ -93,15 +103,13 @@ export async function detectOllama(
     if (!models || models.length === 0) continue;
 
     const usable = models
-      .filter((m): m is TagsEntry & { name: string } =>
-        typeof m.name === "string" && m.name.length > 0,
+      .filter(
+        (m): m is TagsEntry & { name: string } =>
+          typeof m.name === "string" && m.name.length > 0,
       )
       .map((m) => ({ name: m.name, size: m.size ?? Infinity }))
       // Rank by suitability first, then by disk size (small = faster).
-      .sort(
-        (a, b) =>
-          modelRank(a.name) - modelRank(b.name) || a.size - b.size,
-      );
+      .sort((a, b) => modelRank(a.name) - modelRank(b.name) || a.size - b.size);
 
     if (usable.length > 0) {
       const name = usable[0]?.name;

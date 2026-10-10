@@ -90,12 +90,7 @@ export function parseSpecString(
     let sigh: string | null = null;
     for (let k = f.length - 1; k >= 5; k--) {
       const v = f[k];
-      if (
-        v &&
-        v !== "default" &&
-        v !== "M$M" &&
-        !/^\d+$/.test(v)
-      ) {
+      if (v && v !== "default" && v !== "M$M" && !/^\d+$/.test(v)) {
         sigh = v;
         break;
       }
@@ -145,7 +140,10 @@ export function buildSheetUrl(level: StoryboardLevel, sheet: number): string {
   // Modern specs carry the signature only in the level descriptor — the
   // base URL query has `sqp=` but no `sigh`. Append it when missing.
   if (level.sigh && !/[?&]sigh=/.test(url)) {
-    url += (url.includes("?") ? "&" : "?") + "sigh=" + encodeURIComponent(level.sigh);
+    url +=
+      (url.includes("?") ? "&" : "?") +
+      "sigh=" +
+      encodeURIComponent(level.sigh);
   }
   return url;
 }

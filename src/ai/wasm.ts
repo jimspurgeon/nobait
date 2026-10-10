@@ -56,10 +56,7 @@ export interface WasmProviderConfig {
   /** Runtime-support gate override for tests. */
   runtimeSupported?: boolean;
   /** Progress sink for the model download (broadcast to options page). */
-  onDownloadProgress?: (info: {
-    loaded: number;
-    total: number;
-  }) => void;
+  onDownloadProgress?: (info: { loaded: number; total: number }) => void;
 }
 
 /**
@@ -79,7 +76,7 @@ export const BUILTIN_MODELS = {
       "https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct-GGUF/resolve/main/smollm2-360m-instruct-q8_0.gguf",
     ],
   },
-  "stories15m": {
+  stories15m: {
     label: "TinyLlama stories 15M (test-only, ~19 MB)",
     urls: [
       "https://huggingface.co/ggml-org/models/resolve/main/tinyllamas/stories15M-q4_0.gguf",
@@ -122,7 +119,10 @@ export interface WasmStatus {
 export function isWasmRuntimeSupported(): boolean {
   try {
     if (typeof WebAssembly === "undefined") return false;
-    if (typeof (WebAssembly as unknown as Record<string, unknown>).Suspending !== "function") {
+    if (
+      typeof (WebAssembly as unknown as Record<string, unknown>).Suspending !==
+      "function"
+    ) {
       return false;
     }
     new WebAssembly.Memory({
@@ -155,18 +155,24 @@ export class WasmProvider implements AIProvider {
   private readonly maxTokens: number;
   private readonly loader: WllamaLoader;
   private readonly runtimeGate: () => boolean;
-  private readonly onProgress?: (info: { loaded: number; total: number }) => void;
+  private readonly onProgress?: (info: {
+    loaded: number;
+    total: number;
+  }) => void;
 
   private instance: WllamaLike | null = null;
   private loading: Promise<WllamaLike> | null = null;
 
   constructor(config: WasmProviderConfig = {}) {
-    this.modelUrls = [...(config.modelUrls ?? BUILTIN_MODELS["qwen2.5-0.5b"].urls)];
+    this.modelUrls = [
+      ...(config.modelUrls ?? BUILTIN_MODELS["qwen2.5-0.5b"].urls),
+    ];
     this.maxTokens = config.maxTokens ?? 512;
     this.loader = config.loader ?? defaultLoader;
-    this.runtimeGate = config.runtimeSupported !== undefined
-      ? () => config.runtimeSupported === true
-      : isWasmRuntimeSupported;
+    this.runtimeGate =
+      config.runtimeSupported !== undefined
+        ? () => config.runtimeSupported === true
+        : isWasmRuntimeSupported;
     this.onProgress =
       config.onDownloadProgress ?? globalDownloadProgress ?? undefined;
   }
@@ -221,12 +227,21 @@ export class WasmProvider implements AIProvider {
 
     for (const chunk of chunks) {
       try {
-        const systemMsg = { role: "system" as const, content: CLASSIFY_SYSTEM_PROMPT };
-        const userMsg = { role: "user" as const, content: buildBatchUserPrompt(chunk) };
-        const completion = await wllama.createChatCompletion([systemMsg, userMsg], {
-          max_tokens: this.maxTokens,
-          temperature: 0.3,
-        });
+        const systemMsg = {
+          role: "system" as const,
+          content: CLASSIFY_SYSTEM_PROMPT,
+        };
+        const userMsg = {
+          role: "user" as const,
+          content: buildBatchUserPrompt(chunk),
+        };
+        const completion = await wllama.createChatCompletion(
+          [systemMsg, userMsg],
+          {
+            max_tokens: this.maxTokens,
+            temperature: 0.3,
+          },
+        );
         yield* parseBatchResponse(completion, chunk);
       } catch (err) {
         console.error("[nobait:wasm] chunk analysis failed:", err);

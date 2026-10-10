@@ -6,10 +6,7 @@ import { AIInput, StampResult } from "../stamps/types";
 import { evaluateFactCheck, StampTier as FactCheckTier } from "./factcheck";
 import { webext } from "../utils/webext";
 import { detectOllama } from "../ai/autodetect";
-import {
-  getWasmStatus,
-  setWasmDownloadProgressSink,
-} from "../ai/wasm";
+import { getWasmStatus, setWasmDownloadProgressSink } from "../ai/wasm";
 import {
   getSettings,
   onSettingsChanged,
@@ -251,9 +248,7 @@ class BackgroundWorker {
           return null;
         },
       );
-      console.log(
-        this.detectedLocal ?? "none",
-      );
+      console.log(this.detectedLocal ?? "none");
       this.detectedLocalProbed = true;
       if (this.detectedLocal) {
         console.log(

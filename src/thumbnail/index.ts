@@ -200,7 +200,8 @@ export class ThumbnailManager {
     videoId: string,
     key: "1" | "2" | "3" = "2",
   ): Promise<string | null> {
-    const p = this.fallbackLoads.get(videoId) ??
+    const p =
+      this.fallbackLoads.get(videoId) ??
       spriteViaBackground(
         `https://i.ytimg.com/vi/${videoId}/hq${key}.jpg`,
       ).then((bytes) =>
@@ -239,7 +240,9 @@ export class ThumbnailManager {
       // CORS, then rehydrate a Blob in the content world.
       p = spriteViaBackground(url)
         .then((bytes) =>
-          bytes ? new Blob([bytes.slice().buffer], { type: "image/jpeg" }) : null,
+          bytes
+            ? new Blob([bytes.slice().buffer], { type: "image/jpeg" })
+            : null,
         )
         .catch(() => null);
       this.spriteLoads.set(url, p);

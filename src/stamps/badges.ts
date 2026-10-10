@@ -14,12 +14,7 @@ export interface BadgeSpec {
 
 /** Geometric monoline icon ids (shape-distinct, color-blind safe) */
 export type StampIcon =
-  | "check"
-  | "exclaim"
-  | "cross"
-  | "hook"
-  | "prohibit"
-  | "question";
+  "check" | "exclaim" | "cross" | "hook" | "prohibit" | "question";
 
 /**
  * Stroke paths drawn in a 20x20 viewBox. Monoline (uniform stroke width),
@@ -31,22 +26,35 @@ const STAMP_ICON_PATHS: Record<StampIcon, Array<string>> = {
   cross: ["M6.5 6.5 L13.5 13.5", "M13.5 6.5 L6.5 13.5"],
   hook: ["M13 3.5 V11.5 A3.5 3.5 0 0 1 6 11.5", "M11.2 5.2 L13 3.5 L14.8 5.2"],
   prohibit: ["M6.5 13.5 L13.5 6.5"],
-  question: ["M7.5 7.5 A2.5 2.5 0 1 1 10.9 9.8 C10.2 10.2 10 10.7 10 11.5", "M10 15.4 .01 0"],
+  question: [
+    "M7.5 7.5 A2.5 2.5 0 1 1 10.9 9.8 C10.2 10.2 10 10.7 10 11.5",
+    "M10 15.4 .01 0",
+  ],
 };
 
 /** Circle outlines (drawn as stroked circles, not paths) */
-const STAMP_ICON_CIRCLES: Partial<Record<StampIcon, Array<[number, number, number]>>> = {
+const STAMP_ICON_CIRCLES: Partial<
+  Record<StampIcon, Array<[number, number, number]>>
+> = {
   prohibit: [[10, 10, 6.4]],
 };
 
 export const BADGE_SPECS: Record<StampTier, BadgeSpec> = {
-  [StampTier.LEGITIMATE]: { icon: "check", color: "#14803c", label: "Legitimate" },
+  [StampTier.LEGITIMATE]: {
+    icon: "check",
+    color: "#14803c",
+    label: "Legitimate",
+  },
   [StampTier.EXAGGERATED]: {
     icon: "exclaim",
     color: "#8a5a00",
     label: "Exaggerated",
   },
-  [StampTier.MISLEADING]: { icon: "cross", color: "#c42b1c", label: "Misleading" },
+  [StampTier.MISLEADING]: {
+    icon: "cross",
+    color: "#c42b1c",
+    label: "Misleading",
+  },
   [StampTier.CLICKBAIT]: { icon: "hook", color: "#a16207", label: "Clickbait" },
   [StampTier.FAKE]: { icon: "prohibit", color: "#b52f3a", label: "Fake" },
   [StampTier.UNSURE]: { icon: "question", color: "#5c6a7a", label: "Unsure" },
