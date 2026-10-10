@@ -66,7 +66,9 @@ describe("ThumbnailManager failure registry", () => {
     expect(stats).toEqual({
       total: 0,
       swapped: 0,
-      failures: [{ videoId: "vid1", stages: ["innertube"], message: undefined }],
+      failures: [
+        { videoId: "vid1", stages: ["innertube"], message: undefined },
+      ],
     });
   });
 

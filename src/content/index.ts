@@ -15,11 +15,7 @@ import { loadSettings, onSettingsChanged, type Settings } from "./settings";
 import { escapeDomText } from "./signals";
 import { webext } from "../utils/webext";
 import { setAnimationIntensity, applyResult as uiApplyResult } from "./ui";
-import {
-  showStatusChip,
-  hideStatusChip,
-  updateChipState,
-} from "./status-chip";
+import { showStatusChip, hideStatusChip, updateChipState } from "./status-chip";
 import "../styles/base.css";
 
 console.info("[nobait] content script loading (stamps + thumbnails)...");

@@ -32,11 +32,7 @@ const SPEC_STORE = "specs";
 const MIN_TILE_WIDTH = 320;
 
 /** Failure stages for thumbnail resolution (used in stats). */
-export type ThumbFailStage =
-  | "innertube"
-  | "spec-parse"
-  | "sprite"
-  | "fallback";
+export type ThumbFailStage = "innertube" | "spec-parse" | "sprite" | "fallback";
 
 /** Per-video failure reason (for stats/debug). */
 export interface ThumbFailure {
@@ -330,9 +326,7 @@ export class ThumbnailManager {
   ): Promise<string | null> {
     const p =
       this.fallbackLoads.get(videoId) ??
-      spriteViaBackground(
-        `https://i.ytimg.com/vi/${videoId}/hq${key}.jpg`,
-      )
+      spriteViaBackground(`https://i.ytimg.com/vi/${videoId}/hq${key}.jpg`)
         .catch((err: unknown) => {
           this.recordFailure(videoId, "fallback", String(err));
           return null;

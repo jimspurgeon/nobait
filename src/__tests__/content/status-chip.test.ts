@@ -110,9 +110,7 @@ describe("status-chip", () => {
       // Not mounted yet.
       expect(document.querySelector(".nobait-status-chip")).toBeFalsy();
 
-      document.dispatchEvent(
-        new Event("DOMContentLoaded", { bubbles: true }),
-      );
+      document.dispatchEvent(new Event("DOMContentLoaded", { bubbles: true }));
 
       const chip = document.querySelector(".nobait-status-chip");
       expect(chip).toBeTruthy();

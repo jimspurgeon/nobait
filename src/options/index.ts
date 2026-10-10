@@ -539,9 +539,12 @@ function wireEvents(): void {
     void saveSettings({ animations: collectFormState().animations });
   });
 
-  el<HTMLInputElement>("ui-show-status-chip")?.addEventListener("change", () => {
-    void saveSettings({ ui: collectFormState().ui });
-  });
+  el<HTMLInputElement>("ui-show-status-chip")?.addEventListener(
+    "change",
+    () => {
+      void saveSettings({ ui: collectFormState().ui });
+    },
+  );
 
   el<HTMLSelectElement>("cache-ttl")?.addEventListener("change", () => {
     void saveSettings({ thumbnails: collectFormState().thumbnails });
