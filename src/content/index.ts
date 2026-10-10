@@ -101,6 +101,44 @@ async function main(): Promise<void> {
     console.debug("[nobait] settings:", settings);
   });
 
+  // E2E/diagnostics relay: lets a page script drive one background round
+  // trip (or a settings write) and reflect the response back via
+  // `nobait:e2e-result`. Used by e2e/ondevice_smoke.py.
+  window.addEventListener("nobait:e2e", (ev) => {
+    const detail = (ev as CustomEvent).detail as {
+      message?: { type: string; [k: string]: unknown };
+      setSettings?: Record<string, unknown>;
+    } | null;
+    void (async () => {
+      let response: unknown;
+      try {
+        if (detail?.setSettings) {
+          const storage = webext.storage?.local;
+          if (!storage) throw new Error("storage API unavailable");
+          const cur =
+            ((await storage.get("settings")) as Record<string, unknown>) ?? {};
+          const next = {
+            ...(cur["settings"] as Record<string, unknown> | undefined),
+            ...detail.setSettings,
+          };
+          await storage.set({ settings: next });
+          response = { success: true };
+        } else if (detail?.message) {
+          response = await sendToBackground(
+            detail.message as Parameters<typeof sendToBackground>[0],
+          );
+        } else {
+          response = { success: false, error: "bad relay request" };
+        }
+      } catch (e) {
+        response = { success: false, error: String(e) };
+      }
+      window.dispatchEvent(
+        new CustomEvent("nobait:e2e-result", { detail: response }),
+      );
+    })();
+  });
+
   // Clear seen cache on SPA navigation so revisits re-patch (QA seam note).
   window.addEventListener("popstate", () => {
     seen.clear();

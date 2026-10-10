@@ -17,7 +17,12 @@
 
 import { NanoProvider } from "./nano.js";
 import { OllamaProvider } from "./ollama.js";
-import { WasmProvider, isWasmRuntimeSupported, BUILTIN_MODELS } from "./wasm.js";
+import {
+  WasmProvider,
+  isWasmRuntimeSupported,
+  BUILTIN_MODELS,
+  type BuiltinModelId,
+} from "./wasm.js";
 import type { AIProvider } from "./types.js";
 
 /** Config the options page feeds into the factory. */
@@ -197,7 +202,7 @@ export class AIProviderFactory {
     geminiApiKey?: string;
     ollamaUrl?: string;
     ollamaModel?: string;
-    builtinModel?: "qwen2.5-0.5b" | "smollm2-360m";
+    builtinModel?: BuiltinModelId;
     useChromeAI?: boolean;
   }): Promise<AIProvider> {
     // An empty config (e.g. the scheduler's flush-time re-init) inherits
@@ -229,8 +234,14 @@ export class AIProviderFactory {
     this.lastAppliedConfig = { ...config };
 
     const selection = createProvider({
-      geminiApiKey: prefer === "ollama" || prefer === "builtin" ? undefined : config.geminiApiKey,
-      ollamaBaseUrl: prefer === "gemini" || prefer === "builtin" ? undefined : config.ollamaUrl,
+      geminiApiKey:
+        prefer === "ollama" || prefer === "builtin"
+          ? undefined
+          : config.geminiApiKey,
+      ollamaBaseUrl:
+        prefer === "gemini" || prefer === "builtin"
+          ? undefined
+          : config.ollamaUrl,
       ollamaModel: config.ollamaModel,
       createGeminiProvider: (apiKey) => new GeminiProvider(apiKey),
       // The WASM step is only offered when the runtime can actually run
@@ -238,13 +249,9 @@ export class AIProviderFactory {
       createWasmProvider: isWasmRuntimeSupported()
         ? () =>
             new WasmProvider({
-              modelUrls:
-                config.builtinModel !== undefined
-                  ? [
-                      ...(BUILTIN_MODELS[config.builtinModel]?.urls ??
-                        BUILTIN_MODELS["qwen2.5-0.5b"].urls),
-                    ]
-                  : [...BUILTIN_MODELS["qwen2.5-0.5b"].urls],
+              modelUrls: [
+                ...BUILTIN_MODELS[config.builtinModel ?? "qwen2.5-0.5b"].urls,
+              ],
             })
         : undefined,
       skipChromeBuiltin: prefer === "builtin",
@@ -263,7 +270,10 @@ export class AIProviderFactory {
       }
       this.provider = gemini;
       this.currentProviderName = "gemini";
-    } else if (prefer === "builtin" && selection.provider instanceof WasmProvider) {
+    } else if (
+      prefer === "builtin" &&
+      selection.provider instanceof WasmProvider
+    ) {
       this.provider = selection.provider;
       this.currentProviderName = "builtin";
     } else {

@@ -14,6 +14,7 @@
  */
 
 import type { FramePosition } from "../thumbnail/types";
+import type { BuiltinModelId } from "../ai/wasm";
 
 /** Storage key holding the whole settings object. */
 export const SETTINGS_KEY = "nobait:settings";
@@ -23,7 +24,8 @@ export type ThumbPositionKind =
   "start" | "middle" | "end" | "random" | "percent";
 
 /** Which AI provider to use. `auto` follows the factory priority chain. */
-export type BackendPreference = "auto" | "chrome" | "gemini" | "ollama" | "builtin";
+export type BackendPreference =
+  "auto" | "chrome" | "gemini" | "ollama" | "builtin";
 
 /** Placement of stamp badges relative to the video title. */
 export type StampPlacement = "after-title" | "before-title";
@@ -53,7 +55,7 @@ export interface AISettings {
   /** Model tag for the local endpoint (e.g. "qwen3:0.6b"). */
   ollamaModel: string;
   /** Which built-in WASM model to use (catalogue key, see ai/wasm.ts). */
-  builtinModel: "qwen2.5-0.5b" | "smollm2-360m";
+  builtinModel: BuiltinModelId;
 }
 
 /** Stamp display configuration section. */
@@ -268,7 +270,7 @@ export function normalizeSettings(raw: unknown): Settings {
       ollamaModel: asString(ai["ollamaModel"], ""),
       builtinModel: asEnum(
         ai["builtinModel"],
-        ["qwen2.5-0.5b", "smollm2-360m"] as const,
+        ["qwen2.5-0.5b", "smollm2-360m", "stories15m"] as const,
         DEFAULT_SETTINGS.ai.builtinModel,
       ),
     },

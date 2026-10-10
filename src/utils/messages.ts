@@ -20,7 +20,8 @@ export type ContentToBackgroundMessage =
   | { type: "GET_PROVIDER_STATUS" }
   | { type: "VALIDATE_GEMINI_KEY"; key: string }
   | { type: "nobait:clear-thumb-cache" }
-  | { type: "nobait:fetch-sprite"; url: string };
+  | { type: "nobait:fetch-sprite"; url: string }
+  | { type: "GET_WASM_STATUS" };
 
 /** Message types sent from background to content script */
 export type BackgroundToContentMessage =

@@ -22,6 +22,7 @@ import {
   CACHE_TTL_MS,
 } from "../settings/index";
 import type { FramePosition } from "../thumbnail/types";
+import type { BuiltinModelId } from "../ai/wasm";
 
 // `browser` / `chrome` globals come from webextension-polyfill / @types/chrome.
 const api =
@@ -204,7 +205,7 @@ function collectFormState(): DeepPartialSettings {
   if (builtinModel) {
     update.ai = {
       ...update.ai,
-      builtinModel: builtinModel.value as "qwen2.5-0.5b" | "smollm2-360m",
+      builtinModel: builtinModel.value as BuiltinModelId,
     };
   }
 
@@ -561,9 +562,14 @@ async function updateProviderBadge(): Promise<void> {
     (provider === null && settings.ai.ollamaUrl !== "") ||
     (provider === null && !!detectedLocal);
 
-  if (ollamaActive || (provider && provider !== "gemini" && provider !== "None")) {
+  if (
+    ollamaActive ||
+    (provider && provider !== "gemini" && provider !== "None")
+  ) {
     const shown =
-      provider && provider !== "None configured" && provider !== "no provider available"
+      provider &&
+      provider !== "None configured" &&
+      provider !== "no provider available"
         ? provider
         : detectedLocal
           ? `Ollama (auto-detected ${detectedLocal.model})`
