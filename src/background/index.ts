@@ -20,6 +20,11 @@ export { CACHE_TTL_MS };
 /**
  * Background service worker entry point — handles stamp pipeline (P3/P4)
  * and cache-management messages (P2 thumbnail pipeline coordination).
+ *
+ * Firefox MV3 event-page note: Firefox treats background.scripts as a
+ * non-persistent event page that idles out after ~30s without extension-API
+ * activity. Long-running work (wllama model download/inference) must call
+ * `touchKeepalive()` periodically to reset the idle timer (see #8).
  */
 class BackgroundWorker {
   private initialized = false;
@@ -27,6 +32,10 @@ class BackgroundWorker {
   private activeProvider: string | null = null;
   /** Init failure reason, surfaced through GET_PROVIDER_STATUS. */
   private initError: string | null = null;
+  /** Keepalive timer for Firefox MV3 event page survival (issue #8). */
+  private keepaliveId: ReturnType<typeof setInterval> | null = null;
+  /** Outstanding operations holding the keepalive (issue #8). */
+  private keepaliveRefs = 0;
 
   async init(): Promise<void> {
     if (this.initialized) return;
@@ -57,13 +66,14 @@ class BackgroundWorker {
       // Initialize cache database
       await cacheDB.init();
 
-      // Initialize AI provider factory from unified settings
+      // Initialize AI provider factory from unified settings (may download
+      // wllama model — wrap in keepalive to survive MV3 event-page timeout).
       const settings = await getSettings();
-      await this.applyAiSettings(settings);
+      await this.withKeepalive(() => this.applyAiSettings(settings));
 
       // Live settings: re-initialize the provider when AI config changes.
       onSettingsChanged((next) => {
-        void this.applyAiSettings(next);
+        void this.withKeepalive(() => this.applyAiSettings(next));
       });
 
       // Periodic cleanup (hourly)
@@ -106,16 +116,20 @@ class BackgroundWorker {
       // (OnMessageListenerAsync signature). Chrome also supports this.
       switch (message.type) {
         case "EVALUATE_VIDEO":
-          return this.handleEvaluateVideo({
-            videoId: msg.videoId ?? "",
-            title: msg.title ?? "",
-            description: msg.description,
-            transcript: msg.transcript,
-            chapters: msg.chapters,
-          }).catch((err: unknown) => ({
-            success: false,
-            error: String(err),
-          }));
+          // May involve slow inference/model download — wrap in keepalive
+          // to survive MV3 event-page timeout (issue #8).
+          return this.withKeepalive(() =>
+            this.handleEvaluateVideo({
+              videoId: msg.videoId ?? "",
+              title: msg.title ?? "",
+              description: msg.description,
+              transcript: msg.transcript,
+              chapters: msg.chapters,
+            }).catch((err: unknown) => ({
+              success: false,
+              error: String(err),
+            }))
+          );
 
         case "GET_CACHE_STATUS":
           return this.getCacheStatus().catch((err: unknown) => ({
@@ -410,6 +424,39 @@ class BackgroundWorker {
         const req = indexedDB.deleteDatabase(name);
         req.onsuccess = req.onerror = req.onblocked = () => resolve();
       });
+    }
+  }
+
+  /**
+   * Run an operation with the MV3 event-page keepalive held (issue #8).
+   *
+   * Firefox unloads event pages after ~30s without extension-API activity.
+   * Model downloads/inference run inside a Web Worker — invisible to the
+   * idle timer — so a slow EVALUATE_VIDEO or model load dies mid-flight
+   * with "Receiving end does not exist". Holding a cheap storage.local
+   * read every 20s resets the timer for the duration of `op`. Reference
+   * counted so overlapping operations don't drop each other's keepalive.
+   */
+  private async withKeepalive<T>(op: () => Promise<T>): Promise<T> {
+    this.keepaliveRefs++;
+    if (this.keepaliveId === null) {
+      const storage = webext.storage?.local;
+      if (storage) {
+        this.keepaliveId = setInterval(() => {
+          void Promise.resolve(storage.get(null)).catch(() => {
+            /* storage unavailable — idle reset already failed anyway */
+          });
+        }, 20_000);
+      }
+    }
+    try {
+      return await op();
+    } finally {
+      this.keepaliveRefs--;
+      if (this.keepaliveRefs <= 0 && this.keepaliveId !== null) {
+        clearInterval(this.keepaliveId);
+        this.keepaliveId = null;
+      }
     }
   }
 }
