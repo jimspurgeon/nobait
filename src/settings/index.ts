@@ -52,6 +52,8 @@ export interface AISettings {
   ollamaUrl: string;
   /** Model tag for the local endpoint (e.g. "qwen3:0.6b"). */
   ollamaModel: string;
+  /** Which built-in WASM model to use (catalogue key, see ai/wasm.ts). */
+  builtinModel: "qwen2.5-0.5b" | "smollm2-360m";
 }
 
 /** Stamp display configuration section. */
@@ -121,6 +123,7 @@ export const DEFAULT_SETTINGS: Settings = {
     geminiApiKey: "",
     ollamaUrl: "",
     ollamaModel: "",
+    builtinModel: "qwen2.5-0.5b",
   },
   stamps: {
     visible: true,
@@ -263,6 +266,11 @@ export function normalizeSettings(raw: unknown): Settings {
       geminiApiKey: asString(ai["geminiApiKey"], ""),
       ollamaUrl: asString(ai["ollamaUrl"], ""),
       ollamaModel: asString(ai["ollamaModel"], ""),
+      builtinModel: asEnum(
+        ai["builtinModel"],
+        ["qwen2.5-0.5b", "smollm2-360m"] as const,
+        DEFAULT_SETTINGS.ai.builtinModel,
+      ),
     },
     stamps: {
       visible: asBool(stamps["visible"], true),

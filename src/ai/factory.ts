@@ -17,7 +17,7 @@
 
 import { NanoProvider } from "./nano.js";
 import { OllamaProvider } from "./ollama.js";
-import { WasmProvider, isWasmRuntimeSupported } from "./wasm.js";
+import { WasmProvider, isWasmRuntimeSupported, BUILTIN_MODELS } from "./wasm.js";
 import type { AIProvider } from "./types.js";
 
 /** Config the options page feeds into the factory. */
@@ -197,6 +197,7 @@ export class AIProviderFactory {
     geminiApiKey?: string;
     ollamaUrl?: string;
     ollamaModel?: string;
+    builtinModel?: "qwen2.5-0.5b" | "smollm2-360m";
     useChromeAI?: boolean;
   }): Promise<AIProvider> {
     // An empty config (e.g. the scheduler's flush-time re-init) inherits
@@ -235,7 +236,16 @@ export class AIProviderFactory {
       // The WASM step is only offered when the runtime can actually run
       // it; unsupported browsers keep the legacy Gemini-storage fallback.
       createWasmProvider: isWasmRuntimeSupported()
-        ? () => new WasmProvider({})
+        ? () =>
+            new WasmProvider({
+              modelUrls:
+                config.builtinModel !== undefined
+                  ? [
+                      ...(BUILTIN_MODELS[config.builtinModel]?.urls ??
+                        BUILTIN_MODELS["qwen2.5-0.5b"].urls),
+                    ]
+                  : [...BUILTIN_MODELS["qwen2.5-0.5b"].urls],
+            })
         : undefined,
       skipChromeBuiltin: prefer === "builtin",
     });

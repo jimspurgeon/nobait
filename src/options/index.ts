@@ -58,6 +58,28 @@ async function sendMessage(message: Record<string, unknown>): Promise<unknown> {
   });
 }
 
+/**
+ * Fill the runtime-support note under the built-in model picker: either
+ * "works here" or "browser too old", so users know before saving.
+ */
+async function updateBuiltinRuntimeNote(): Promise<void> {
+  const note = el("builtin-runtime-note");
+  if (!note) return;
+  try {
+    const resp = (await sendMessage({ type: "GET_WASM_STATUS" })) as {
+      status?: { runtimeSupported?: boolean };
+    } | null;
+    if (resp?.status?.runtimeSupported) {
+      note.textContent = "This browser supports the built-in AI.";
+    } else {
+      note.textContent =
+        "This browser lacks the WebAssembly features the built-in AI needs (Firefox 133+).";
+    }
+  } catch {
+    note.textContent = ""; // background unreachable — stay quiet
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Bindings
 // ---------------------------------------------------------------------------
@@ -83,6 +105,12 @@ async function loadIntoForm(settings: Settings): Promise<void> {
   if (ollamaModel && settings.ai.ollamaModel) {
     ollamaModel.value = settings.ai.ollamaModel;
   }
+
+  const builtinModel = el<HTMLSelectElement>("builtin-model");
+  if (builtinModel) builtinModel.value = settings.ai.builtinModel;
+  const builtinFields = el("builtin-fields");
+  builtinFields?.classList.toggle("hidden", settings.ai.backend !== "builtin");
+  void updateBuiltinRuntimeNote();
 
   // --- Frame position ---
   const framePos = el<HTMLSelectElement>("frame-position");
@@ -170,6 +198,14 @@ function collectFormState(): DeepPartialSettings {
   const ollamaModel = el<HTMLInputElement>("ollama-model");
   if (ollamaModel) {
     update.ai = { ...update.ai, ollamaModel: ollamaModel.value.trim() };
+  }
+
+  const builtinModel = el<HTMLSelectElement>("builtin-model");
+  if (builtinModel) {
+    update.ai = {
+      ...update.ai,
+      builtinModel: builtinModel.value as "qwen2.5-0.5b" | "smollm2-360m",
+    };
   }
 
   const framePos = el<HTMLSelectElement>("frame-position");
@@ -322,6 +358,29 @@ function wireEvents(): void {
     const container = el("percent-slider-container");
     container?.classList.toggle("hidden", sel.value !== "percent");
   });
+
+  // Show/hide the built-in model fields when the backend changes.
+  el<HTMLSelectElement>("backend")?.addEventListener("change", (e) => {
+    const sel = e.target as HTMLSelectElement;
+    el("builtin-fields")?.classList.toggle("hidden", sel.value !== "builtin");
+  });
+
+  // Live download progress from the background worker.
+  if (typeof browser !== "undefined" && browser.runtime?.onMessage) {
+    browser.runtime.onMessage.addListener((msg: unknown) => {
+      const m = msg as { type?: string; loaded?: number; total?: number };
+      if (m?.type !== "MODEL_DOWNLOAD_PROGRESS") return;
+      const wrap = el("builtin-download");
+      const bar = el("builtin-progress-bar");
+      const text = el("builtin-progress-text");
+      if (!wrap || !bar || !text) return;
+      if (!m.total) return;
+      const pct = Math.min(100, Math.round(((m.loaded ?? 0) / m.total) * 100));
+      wrap.classList.remove("hidden");
+      bar.style.width = `${pct}%`;
+      text.textContent = `${pct}% (${Math.round((m.loaded ?? 0) / 1e6)} / ${Math.round(m.total / 1e6)} MB)`;
+    });
+  }
 
   el<HTMLInputElement>("percent-value")?.addEventListener("input", (e) => {
     const slider = e.target as HTMLInputElement;

@@ -47,7 +47,8 @@
           </select>
           <p class="hint">
             Auto follows the priority chain: Chrome Prompt API (if available) →
-            Gemini → Ollama. Manual selection overrides the chain.
+            Gemini → Ollama → Built-in on-device AI. Manual selection overrides
+            the chain.
           </p>
         </div>
 
@@ -90,6 +91,34 @@
             Recommended: a sub-1B model like qwen3:0.6b or llama3.2:1b. Smaller
             models are faster but less accurate.
           </p>
+        </div>
+
+        <!-- Built-in WASM backend fields -->
+        <div class="field nested hidden" id="builtin-fields">
+          <label for="builtin-model">Built-in model</label>
+          <select id="builtin-model" name="builtin-model">
+            <option value="qwen2.5-0.5b">
+              Qwen2.5 0.5B (default, ~470 MB download)
+            </option>
+            <option value="smollm2-360m">
+              SmolLM2 360M (~370 MB download)
+            </option>
+          </select>
+          <p class="hint">
+            The model downloads from HuggingFace on first use and is cached
+            locally in your browser (OPFS). No account, no key, nothing leaves
+            your machine afterwards.
+          </p>
+          <div
+            class="hidden"
+            id="builtin-download"
+            role="progressbar"
+            aria-label="Model download progress"
+          >
+            <div class="progress-track"><div id="builtin-progress-bar"></div></div>
+            <span id="builtin-progress-text" class="hint"></span>
+          </div>
+          <p class="hint" id="builtin-runtime-note" role="status"></p>
         </div>
 
         <div class="actions">

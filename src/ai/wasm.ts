@@ -93,6 +93,28 @@ export type BuiltinModelId = keyof typeof BUILTIN_MODELS;
 export const WASM_BATCH_CHUNK = 3;
 
 /**
+ * Global download-progress sink. The background entry assigns this so
+ * provider instances created inside the factory can broadcast download
+ * progress to the options page without wiring through every layer.
+ */
+let globalDownloadProgress: WasmProviderConfig["onDownloadProgress"] | null =
+  null;
+
+/** Register the process-wide model download progress sink. */
+export function setWasmDownloadProgressSink(
+  sink: WasmProviderConfig["onDownloadProgress"] | null,
+): void {
+  globalDownloadProgress = sink;
+}
+
+export interface WasmStatus {
+  /** Whether this runtime can run the WASM backend (JSPI + memory64). */
+  runtimeSupported: boolean;
+  /** Catalogue of available models (labels + sizes for the UI). */
+  models: Record<BuiltinModelId, { label: string; urls: readonly string[] }>;
+}
+
+/**
  * Runtime support gate: wllama needs WebAssembly JSPI + memory64.
  * Firefox ships both since 133; strict_min_version 115 users just don't
  * get this provider (graceful degradation per AGENTS.md).
@@ -145,7 +167,8 @@ export class WasmProvider implements AIProvider {
     this.runtimeGate = config.runtimeSupported !== undefined
       ? () => config.runtimeSupported === true
       : isWasmRuntimeSupported;
-    this.onProgress = config.onDownloadProgress;
+    this.onProgress =
+      config.onDownloadProgress ?? globalDownloadProgress ?? undefined;
   }
 
   /** True when this browser can run the WASM backend at all. */
@@ -227,7 +250,16 @@ export class WasmProvider implements AIProvider {
         console.warn("[nobait:wasm] exit() failed:", e);
       } finally {
         this.instance = null;
+        this.loading = null;
       }
     }
   }
+}
+
+/** Snapshot of backend status for UIs (options page, e2e smoke). */
+export function getWasmStatus(): WasmStatus {
+  return {
+    runtimeSupported: isWasmRuntimeSupported(),
+    models: BUILTIN_MODELS,
+  };
 }

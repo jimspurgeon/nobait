@@ -7,6 +7,10 @@ import { evaluateFactCheck, StampTier as FactCheckTier } from "./factcheck";
 import { webext } from "../utils/webext";
 import { detectOllama } from "../ai/autodetect";
 import {
+  getWasmStatus,
+  setWasmDownloadProgressSink,
+} from "../ai/wasm";
+import {
   getSettings,
   onSettingsChanged,
   CACHE_TTL_MS,
@@ -29,6 +33,21 @@ class BackgroundWorker {
     if (this.initialized) return;
 
     console.log("[nobait] Initializing background worker...");
+
+    // Broadcast built-in model download progress to the options page.
+    setWasmDownloadProgressSink(({ loaded, total }) => {
+      const runtimeApi = webext.runtime;
+      if (!runtimeApi) return;
+      void Promise.resolve(
+        runtimeApi.sendMessage({
+          type: "MODEL_DOWNLOAD_PROGRESS",
+          loaded,
+          total,
+        }),
+      ).catch(() => {
+        /* no listener (options page closed) — fine */
+      });
+    });
 
     // Register the message handler FIRST — a slow Ollama autodetect probe
     // (or any future init step) must never delay responsiveness to
@@ -117,6 +136,12 @@ class BackgroundWorker {
             success: true,
             provider: this.activeProvider,
             detectedLocal: this.detectedLocal,
+          });
+
+        case "GET_WASM_STATUS":
+          return Promise.resolve({
+            success: true,
+            status: getWasmStatus(),
           });
 
         case "VALIDATE_GEMINI_KEY": {
@@ -245,6 +270,7 @@ class BackgroundWorker {
       geminiApiKey: ai.geminiApiKey || undefined,
       ollamaUrl: ai.ollamaUrl || this.detectedLocal?.url,
       ollamaModel: ai.ollamaModel || this.detectedLocal?.model,
+      builtinModel: ai.builtinModel,
     });
     this.activeProvider = aiProviderFactory.getCurrentProviderName();
   }
