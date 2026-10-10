@@ -100,11 +100,14 @@
         <div class="field nested hidden" id="builtin-fields">
           <label for="builtin-model">Built-in model</label>
           <select id="builtin-model" name="builtin-model">
-            <option value="qwen2.5-0.5b">
-              Qwen2.5 0.5B (default, ~470 MB download)
+            <option value="smollm2-135m">
+              SmolLM2 135M (default, ~88 MB download)
             </option>
             <option value="smollm2-360m">
               SmolLM2 360M (~370 MB download)
+            </option>
+            <option value="qwen2.5-0.5b">
+              Qwen2.5 0.5B (highest quality, ~470 MB download)
             </option>
           </select>
           <p class="hint">
@@ -228,6 +231,23 @@
           </button>
           <span id="stamp-status" class="status"></span>
         </div>
+      </section>
+
+      <!-- UI settings section -->
+      <section class="card" id="ui-settings">
+        <h2>User Interface</h2>
+
+        <div class="field">
+          <label
+            ><input type="checkbox" id="ui-show-status-chip" /> Show status chip
+            on YouTube pages</label
+          >
+          <p class="hint">
+            Shows a small bottom-right chip displaying model download progress
+            and thumbnail swap status. Dismissible per session.
+          </p>
+        </div>
+
       </section>
 
       <!-- Animation settings section -->

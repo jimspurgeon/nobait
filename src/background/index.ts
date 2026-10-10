@@ -6,7 +6,7 @@ import { AIInput, StampResult } from "../stamps/types";
 import { evaluateFactCheck, StampTier as FactCheckTier } from "./factcheck";
 import { webext } from "../utils/webext";
 import { detectOllama } from "../ai/autodetect";
-import { getWasmStatus, setWasmDownloadProgressSink } from "../ai/wasm";
+import { getWasmStatus, setWasmDownloadProgressSink, WasmProvider } from "../ai/wasm";
 import {
   getSettings,
   onSettingsChanged,
@@ -32,6 +32,8 @@ class BackgroundWorker {
   private activeProvider: string | null = null;
   /** Init failure reason, surfaced through GET_PROVIDER_STATUS. */
   private initError: string | null = null;
+  /** Keepalive interval id during model warmup (Firefox event-page gate). */
+  private keepaliveId: ReturnType<typeof setInterval> | null = null;
 
   async init(): Promise<void> {
     if (this.initialized) return;
@@ -39,19 +41,19 @@ class BackgroundWorker {
     console.log("[nobait] Initializing background worker...");
 
     try {
-      // Broadcast built-in model download progress to the options page.
+      // Broadcast built-in model download progress to the options page and
+      // (via tabs fan-out) to content scripts in YouTube tabs, which drive
+      // the status chip. runtime.sendMessage alone reaches extension pages
+      // only — content scripts never see it (that was the invisible-download
+      // bug this fixes).
       setWasmDownloadProgressSink(({ loaded, total }) => {
+        const message = { type: "MODEL_DOWNLOAD_PROGRESS", loaded, total };
         const runtimeApi = webext.runtime;
         if (!runtimeApi) return;
-        void Promise.resolve(
-          runtimeApi.sendMessage({
-            type: "MODEL_DOWNLOAD_PROGRESS",
-            loaded,
-            total,
-          }),
-        ).catch(() => {
+        void Promise.resolve(runtimeApi.sendMessage(message)).catch(() => {
           /* no listener (options page closed) — fine */
         });
+        void this.broadcastToTabs(message);
       });
 
       // Register the message handler FIRST — a slow Ollama autodetect probe
@@ -296,6 +298,55 @@ class BackgroundWorker {
       builtinModel: ai.builtinModel,
     });
     this.activeProvider = aiProviderFactory.getCurrentProviderName();
+
+    // Download-on-install: when the zero-config builtin WASM provider is
+    // active, eagerly download/load the model so the user's first YouTube
+    // visit doesn't stall behind an ~88 MB download. Fire-and-forget —
+    // failures are logged but never block EVALUATE_VIDEO (first analyze
+    // retries lazily). Only fires once per worker lifetime (once-successful
+    // wllama caches the model in OPFS, so restarts load from disk quickly).
+    const provider = aiProviderFactory.getProvider();
+    if (provider instanceof WasmProvider) {
+      void this.warmupBuiltin(provider);
+    }
+  }
+
+  /**
+   * Warm up the builtin WASM provider with a keepalive heartbeat. Firefox
+   * event pages idle out after ~30s without extension-API activity; the
+   * wllama download runs entirely in workers and won't reset the timer on
+   * its own (issue #8 pattern). A cheap runtime.getManifest() call every
+   * 20s keeps the worker alive until the download completes.
+   */
+  private warmupBuiltin(provider: WasmProvider): Promise<void> {
+    if (this.keepaliveId !== null) return Promise.resolve();
+    this.keepaliveId = setInterval(() => {
+      // Any extension-API call resets the idle timer.
+      try {
+        webext.runtime?.getManifest?.();
+      } catch {
+        /* worker tearing down — stop the heartbeat */
+        this.clearWarmupKeepalive();
+      }
+    }, 20_000);
+    const done = () => this.clearWarmupKeepalive();
+    return provider
+      .warmup()
+      .then(() => {
+        console.log("[nobait] builtin model warmed up");
+        done();
+      })
+      .catch((err: unknown) => {
+        console.warn("[nobait] builtin model warmup failed:", err);
+        done();
+      });
+  }
+
+  private clearWarmupKeepalive(): void {
+    if (this.keepaliveId !== null) {
+      clearInterval(this.keepaliveId);
+      this.keepaliveId = null;
+    }
   }
 
   /**
@@ -381,6 +432,29 @@ class BackgroundWorker {
     const provider = await aiProviderFactory.initialize({});
     if (provider instanceof GeminiProvider) {
       await provider.saveApiKey(key);
+    }
+  }
+
+  /**
+   * Send a message to every YouTube tab's content script (progress fan-out).
+   * Non-YouTube tabs without our content script reject — ignored.
+   */
+  private async broadcastToTabs(message: unknown): Promise<void> {
+    const tabsApi = webext.tabs;
+    if (!tabsApi) return;
+    try {
+      const tabs = await tabsApi.query({ url: "*://*.youtube.com/*" });
+      for (const tab of tabs) {
+        if (tab.id != null) {
+          try {
+            await tabsApi.sendMessage(tab.id, message);
+          } catch {
+            // Tab may not have our content script - ignore
+          }
+        }
+      }
+    } catch {
+      // Tab messaging unavailable - ignore
     }
   }
 

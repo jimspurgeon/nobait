@@ -31,6 +31,29 @@ const SPEC_STORE = "specs";
 /** Preferred minimum tile width — matches YouTube's L2/L3 320px tiles. */
 const MIN_TILE_WIDTH = 320;
 
+/** Failure stages for thumbnail resolution (used in stats). */
+export type ThumbFailStage =
+  | "innertube"
+  | "spec-parse"
+  | "sprite"
+  | "fallback";
+
+/** Per-video failure reason (for stats/debug). */
+export interface ThumbFailure {
+  videoId: string;
+  /** Every stage that failed for this video, in order. */
+  stages: ThumbFailStage[];
+  /** First recorded error message, if any. */
+  message?: string;
+}
+
+/** Aggregate thumbnail batch stats (exposed via window.__nobaitStats). */
+export interface ThumbBatchStats {
+  total: number;
+  swapped: number;
+  failures: ThumbFailure[];
+}
+
 interface SpecEntry {
   spec: PlayerStoryboardSpec;
   expiresAt: number;
@@ -96,6 +119,34 @@ async function specPut(
   }
 }
 
+/**
+ * One-line batch summary, logged at info when any video in the batch
+ * failed to swap: e.g.
+ *   [nobait] thumbs: 12 cards, 9 swapped, 3 kept-original (sprite: 2, innertube: 1)
+ * With nothing failing, batches stay silent (successful runs shouldn't
+ * spam the console on every scroll).
+ */
+function logBatchSummary(
+  total: number,
+  swapped: number,
+  failures: ThumbFailure[],
+): void {
+  if (failures.length === 0) return;
+  const byStage = new Map<string, number>();
+  for (const f of failures) {
+    for (const stage of f.stages) {
+      byStage.set(stage, (byStage.get(stage) ?? 0) + 1);
+    }
+  }
+  const breakdown = [...byStage.entries()]
+    .map(([stage, n]) => `${stage}: ${n}`)
+    .join(", ");
+  console.info(
+    `[nobait] thumbs: ${total} cards, ${swapped} swapped, ` +
+      `${failures.length} kept-original (${breakdown})`,
+  );
+}
+
 export class ThumbnailManager {
   private cache = new ThumbnailCache();
   /** videoId → in-flight pipeline promise (request coalescing). */
@@ -104,6 +155,21 @@ export class ThumbnailManager {
   private sprites = new Map<string, ImageBitmap>();
   private fetchImpl: typeof fetch;
   private position: FramePosition;
+
+  /**
+   * Failure registry keyed by videoId (most recent failure per video).
+   * Consumed by getBatchStats() and the status chip.
+   */
+  private failures = new Map<string, ThumbFailure>();
+
+  /**
+   * Cap on retained failure entries. Permanently failing videos (live
+   * streams, rentals) would otherwise grow the registry — and the
+   * window.__nobaitStats copy per batch — unbounded over a long SPA
+   * session. Oldest entries are evicted first (Map preserves insertion
+   * order).
+   */
+  private static readonly MAX_FAILURES = 200;
 
   constructor(
     opts: { position?: FramePosition; fetchImpl?: typeof fetch } = {},
@@ -117,6 +183,29 @@ export class ThumbnailManager {
 
   setPosition(position: FramePosition): void {
     this.position = position;
+  }
+
+  /** Cumulative batch counters (exposed via window.__nobaitStats). */
+  private statsTotal = 0;
+  private statsSwapped = 0;
+
+  /** Snapshot of cumulative stats (for the status chip/__nobaitStats). */
+  getStats(): ThumbBatchStats {
+    return {
+      total: this.statsTotal,
+      swapped: this.statsSwapped,
+      failures: this.getFailures(),
+    };
+  }
+
+  /** Snapshot of cumulative failure stats (for the status chip/console). */
+  getFailures(): ThumbFailure[] {
+    return [...this.failures.values()];
+  }
+
+  /** Clear the failure registry (e.g. when restarting a batch scan). */
+  clearFailures(): void {
+    this.failures.clear();
   }
 
   /** Single-video convenience. Returns blob URL or null (degrade silently). */
@@ -144,9 +233,16 @@ export class ThumbnailManager {
     await Promise.allSettled(
       pending.map(async ({ id, p }) => {
         const url = await p.catch(() => null);
-        if (url) results.set(id, url);
+        if (url) {
+          results.set(id, url);
+          // Resolved (possibly via fallback frame) — this video is fine.
+          this.failures.delete(id);
+        }
       }),
     );
+    this.statsTotal += videoIds.length;
+    this.statsSwapped += results.size;
+    logBatchSummary(videoIds.length, results.size, this.getFailures());
     return results;
   }
 
@@ -181,7 +277,10 @@ export class ThumbnailManager {
       const blob = await this.loadSprite(sheetUrl);
       // Sprite fetch failed (expired sig, removed sheet, rate limit…) —
       // fall back to the mid-video frame rather than showing nothing.
-      if (!blob) return this.resolveFallbackFrame(videoId);
+      if (!blob) {
+        this.recordFailure(videoId, "sprite", `sheet ${sheetUrl}`);
+        return this.resolveFallbackFrame(videoId);
+      }
       bitmap = await createImageBitmap(blob);
       this.sprites.set(sheetUrl, bitmap);
     }
@@ -189,6 +288,35 @@ export class ThumbnailManager {
     if (!out) return this.resolveFallbackFrame(videoId);
     void this.cache.put(videoId, frameIndex, out);
     return URL.createObjectURL(out);
+  }
+
+  /**
+   * Record a pipeline failure for `videoId`. Videos failing multiple
+   * stages (InnerTube down → fallback also blocked) accumulate every
+   * stage in order; entries for videos that eventually resolve are
+   * dropped by {@link getMany}, so the registry only holds genuine
+   * no-swap videos.
+   */
+  private recordFailure(
+    videoId: string,
+    stage: ThumbFailStage,
+    message?: string,
+  ): void {
+    const entry = this.failures.get(videoId);
+    if (entry) {
+      if (!entry.stages.includes(stage)) entry.stages.push(stage);
+    } else {
+      while (this.failures.size >= ThumbnailManager.MAX_FAILURES) {
+        const oldest = this.failures.keys().next().value;
+        if (oldest === undefined) break;
+        this.failures.delete(oldest);
+      }
+      this.failures.set(videoId, {
+        videoId,
+        stages: [stage],
+        message,
+      });
+    }
   }
 
   /**
@@ -204,13 +332,18 @@ export class ThumbnailManager {
       this.fallbackLoads.get(videoId) ??
       spriteViaBackground(
         `https://i.ytimg.com/vi/${videoId}/hq${key}.jpg`,
-      ).then((bytes) =>
-        bytes
-          ? URL.createObjectURL(
-              new Blob([bytes.slice().buffer], { type: "image/jpeg" }),
-            )
-          : null,
-      );
+      )
+        .catch((err: unknown) => {
+          this.recordFailure(videoId, "fallback", String(err));
+          return null;
+        })
+        .then((bytes) =>
+          bytes
+            ? URL.createObjectURL(
+                new Blob([bytes.slice().buffer], { type: "image/jpeg" }),
+              )
+            : null,
+        );
     this.fallbackLoads.set(videoId, p);
     return p;
   }
@@ -218,14 +351,29 @@ export class ThumbnailManager {
   private async fetchSpec(
     videoId: string,
   ): Promise<PlayerStoryboardSpec | null> {
+    let pr: unknown;
     try {
-      const pr = await fetchPlayerResponse(videoId, this.fetchImpl);
-      const spec = parseStoryboardSpec(pr);
-      if (spec) await specPut(videoId, spec);
-      return spec;
-    } catch {
+      pr = await fetchPlayerResponse(videoId, this.fetchImpl);
+    } catch (err) {
+      // InnerTube unreachable (ytcfg key missing, endpoint error, network
+      // blocked by tracking protection…). Degrade to the fallback frame,
+      // but keep the reason for the stats surface.
+      this.recordFailure(videoId, "innertube", String(err));
       return null;
     }
+    const spec = parseStoryboardSpec(pr);
+    if (!spec) {
+      // Player response had no usable storyboards (rentals, live streams,
+      // region blocks) — degrade, but record why.
+      this.recordFailure(
+        videoId,
+        "spec-parse",
+        "player_response contained no storyboard spec",
+      );
+      return null;
+    }
+    await specPut(videoId, spec);
+    return spec;
   }
 
   private spriteLoads = new Map<string, Promise<Blob | null>>();

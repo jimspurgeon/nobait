@@ -155,6 +155,10 @@ async function loadIntoForm(settings: Settings): Promise<void> {
   const intensity = el<HTMLSelectElement>("anim-intensity");
   if (intensity) intensity.value = settings.animations.intensity;
 
+  // --- UI ---
+  const showChip = el<HTMLInputElement>("ui-show-status-chip");
+  if (showChip) showChip.checked = settings.ui.showStatusChip;
+
   // --- Cache ---
   const cacheTtl = el<HTMLSelectElement>("cache-ttl");
   if (cacheTtl) cacheTtl.value = settings.thumbnails.cacheTtl;
@@ -262,6 +266,11 @@ function collectFormState(): DeepPartialSettings {
       ...update.animations,
       intensity: intensity.value as AnimationIntensity,
     };
+  }
+
+  const showChip = el<HTMLInputElement>("ui-show-status-chip");
+  if (showChip) {
+    update.ui = { showStatusChip: showChip.checked };
   }
 
   const cacheTtl = el<HTMLSelectElement>("cache-ttl");
@@ -528,6 +537,10 @@ function wireEvents(): void {
 
   el<HTMLSelectElement>("anim-intensity")?.addEventListener("change", () => {
     void saveSettings({ animations: collectFormState().animations });
+  });
+
+  el<HTMLInputElement>("ui-show-status-chip")?.addEventListener("change", () => {
+    void saveSettings({ ui: collectFormState().ui });
   });
 
   el<HTMLSelectElement>("cache-ttl")?.addEventListener("change", () => {

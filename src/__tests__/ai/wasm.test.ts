@@ -66,9 +66,58 @@ describe("WasmProvider", () => {
     expect(p.supported).toBe(true);
   });
 
-  test("default model is the Qwen catalogue entry", () => {
-    expect(BUILTIN_MODELS["qwen2.5-0.5b"].urls.length).toBe(1);
-    expect(BUILTIN_MODELS["qwen2.5-0.5b"].urls[0]).toMatch(/qwen2\.5-0\.5b/);
+  test("catalogue: smollm2-135m (default) and all three models present", () => {
+    const smol = BUILTIN_MODELS["smollm2-135m"];
+    expect(smol.urls.length).toBeGreaterThan(0);
+    expect(smol.urls[0]).toMatch(/smollm2-135m/i);
+    expect(BUILTIN_MODELS["smollm2-360m"].urls.length).toBeGreaterThan(0);
+    expect(BUILTIN_MODELS["qwen2.5-0.5b"].urls.length).toBeGreaterThan(0);
+  });
+
+  test("warmup loads the model once and shares it with analyzeBatch", async () => {
+    let loads = 0;
+    const wllama = makeWllama({ onLoad: () => loads++ });
+    const p = new WasmProvider({
+      loader: async () => wllama,
+      runtimeSupported: true,
+    });
+
+    // warmup triggers the load…
+    await p.warmup();
+    expect(loads).toBe(1);
+
+    // …and is idempotent: concurrent warmups + a follow-up warmup do not
+    // re-trigger the model download.
+    await Promise.all([p.warmup(), p.warmup()]);
+    expect(loads).toBe(1);
+
+    // analyzeBatch reuses the warmed instance (no second load).
+    for await (const _ of p.analyzeBatch([signal("x", "X")])) break;
+    expect(loads).toBe(1);
+  });
+
+  test("warmup failure propagates and does not poison a later lazy load", async () => {
+    let fail = true;
+    const wllama: WllamaLike = {
+      loadModelFromUrl: vi.fn(async () => {
+        if (fail) throw new Error("download interrupted");
+      }),
+      createChatCompletion: vi.fn(async () => ({ content: modelJson(["r"]) })),
+      createCompletion: vi.fn(async () => ({ content: "[]" })),
+      exit: vi.fn(async () => {}),
+    };
+    const p = new WasmProvider({
+      loader: async () => wllama,
+      runtimeSupported: true,
+    });
+
+    await expect(p.warmup()).rejects.toThrow(/interrupted/);
+
+    // Retry path: failed load is not memoized, so analyzeBatch can recover.
+    fail = false;
+    for await (const r of p.analyzeBatch([signal("r", "R")])) {
+      expect(r.stamp).toBe(StampTier.LEGITIMATE);
+    }
   });
 
   test("analyzeBatch yields parsed results per chunk", async () => {

@@ -24,6 +24,8 @@ export type WebExtMessageListener = (
 export interface WebExtRuntime {
   sendMessage(message: unknown): PromiseLike<unknown>;
   getURL(path: string): string;
+  /** Cheap manifest read — used as a keepalive call, so optional. */
+  getManifest?(): Record<string, unknown>;
   onMessage: {
     addListener(cb: WebExtMessageListener): void;
   };

@@ -6,6 +6,7 @@
 
 import type { VideoCard } from "./dom";
 import type { FramePosition } from "../thumbnail/types";
+import type { ThumbBatchStats, ThumbFailure } from "../thumbnail/index";
 import { batchCrossfade } from "./ui";
 import { ThumbnailManager } from "../thumbnail/index";
 
@@ -28,6 +29,16 @@ export class ThumbnailSwapper {
 
   setPosition(position: FramePosition): void {
     this.thumbMgr.setPosition(position);
+  }
+
+  /** Failure stats from the thumbnail pipeline (diagnostics/status chip). */
+  getThumbFailures(): ThumbFailure[] {
+    return this.thumbMgr.getFailures();
+  }
+
+  /** Cumulative thumbnail stats (diagnostics/status chip). */
+  getThumbStats(): ThumbBatchStats {
+    return this.thumbMgr.getStats();
   }
 
   /**

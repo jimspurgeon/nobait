@@ -15,6 +15,11 @@ import { loadSettings, onSettingsChanged, type Settings } from "./settings";
 import { escapeDomText } from "./signals";
 import { webext } from "../utils/webext";
 import { setAnimationIntensity, applyResult as uiApplyResult } from "./ui";
+import {
+  showStatusChip,
+  hideStatusChip,
+  updateChipState,
+} from "./status-chip";
 import "../styles/base.css";
 
 console.info("[nobait] content script loading (stamps + thumbnails)...");
@@ -29,6 +34,33 @@ const seen = new Map<
 
 /** Latest settings snapshot (live-updated via storage.onChanged). */
 let currentSettings: Settings | null = null;
+
+/** Whether the status chip is currently shown in this page. */
+let chipElVisible = false;
+
+/**
+ * Publish thumbnail stats to `window.__nobaitStats` (read-only diagnostics
+ * surface for users/debugging — see AGENTS.md debugging tips).
+ */
+function publishStats(swapper: ThumbnailSwapper): void {
+  const stats = swapper.getThumbStats();
+  (window as unknown as Record<string, unknown>)["__nobaitStats"] = stats;
+  if (chipElVisible && stats.failures.length > 0 && stats.total > 0) {
+    // Surface thumbnail failures on the chip only when nothing swapped at
+    // all — partial failures are normal (live streams, rentals) and would
+    // be noise.
+    if (stats.swapped === 0) {
+      updateChipState({
+        phase: "error",
+        errorMessage: `no thumbnails swapped (${stats.failures
+          .flatMap((f) => f.stages)
+          .filter((s, i, a) => a.indexOf(s) === i)
+          .slice(0, 2)
+          .join(", ")})`,
+      });
+    }
+  }
+}
 
 /** Fair scheduling for IntersectionObserver callbacks */
 const pendingCards = new Set<HTMLElement>();
@@ -52,6 +84,12 @@ async function main(): Promise<void> {
     settings.animations.enabled ? settings.animations.intensity : "off",
   );
 
+  // Show status chip if enabled (Slice 2).
+  if (settings.ui.showStatusChip) {
+    showStatusChip({ phase: "ready" });
+    chipElVisible = true;
+  }
+
   // --- Thumbnail swap (P2) ---
   const swapper = new ThumbnailSwapper({
     position: settings.thumbnails.position,
@@ -62,7 +100,10 @@ async function main(): Promise<void> {
 
   const observer = new SpatObserver({
     onCards: (cards) => {
-      void swapper.applyCards(cards);
+      void swapper.applyCards(cards).then(() => {
+        // Refresh stats exposure after each batch settles.
+        publishStats(swapper);
+      });
     },
   });
 
@@ -94,6 +135,14 @@ async function main(): Promise<void> {
       .forEach((host) => {
         host.style.display = next.stamps.visible ? "" : "none";
       });
+    // Status chip visibility toggle.
+    if (next.ui.showStatusChip && !chipElVisible) {
+      showStatusChip({ phase: "ready" });
+      chipElVisible = true;
+    } else if (!next.ui.showStatusChip && chipElVisible) {
+      hideStatusChip();
+      chipElVisible = false;
+    }
   });
 
   // Diagnostics hook (see AGENTS.md debugging tips).
@@ -304,9 +353,25 @@ function listenForResults(): void {
     const message = rawMessage as {
       type?: string;
       result?: StreamedResult;
+      loaded?: number;
+      total?: number;
     };
     if (message?.type === "NEW_RESULT" && message.result) {
       applyStreamedResult(message.result);
+    }
+    // Model download progress from the background (Slice 2): fan-out via
+    // tabs.sendMessage reaches content scripts, unlike runtime.sendMessage.
+    if (message?.type === "MODEL_DOWNLOAD_PROGRESS" && chipElVisible) {
+      const loaded = Number(message.loaded ?? 0);
+      const total = Number(message.total ?? 0);
+      if (total > 0 && loaded < total) {
+        updateChipState({
+          phase: "download",
+          progress: Math.floor((loaded / total) * 100),
+        });
+      } else {
+        updateChipState({ phase: "ready" });
+      }
     }
     return false;
   });

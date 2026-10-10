@@ -215,6 +215,17 @@ export class WasmProvider implements AIProvider {
   }
 
   /**
+   * Eager model load at startup (download-on-install): the first analyze
+   * then hits a warm model instead of stalling on an ~88 MB download.
+   * Idempotent — shares the ensureModel() in-flight promise, so a racing
+   * analyzeBatch just awaits the same load. Failures propagate to the
+   * caller (background logs them; first analyze retries lazily).
+   */
+  warmup(): Promise<void> {
+    return this.ensureModel().then(() => undefined);
+  }
+
+  /**
    * Lazily load the model on first analyze — NOT at construction, so a
    * Firefox 115 user who never picks "builtin" never downloads anything.
    */

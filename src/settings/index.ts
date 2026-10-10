@@ -92,6 +92,12 @@ export interface FactCheckSettingsSection {
   apiKey: string;
 }
 
+/** UI configuration section. */
+export interface UISettings {
+  /** Show status chip on YouTube pages (download progress, AI status, thumb stats). */
+  showStatusChip: boolean;
+}
+
 /** The whole persisted settings object. */
 export interface Settings {
   ai: AISettings;
@@ -105,6 +111,7 @@ export interface Settings {
     /** Positive-cache TTL preset. */
     cacheTtl: CacheTTL;
   };
+  ui: UISettings;
   debug: boolean;
 }
 
@@ -125,7 +132,7 @@ export const DEFAULT_SETTINGS: Settings = {
     geminiApiKey: "",
     ollamaUrl: "",
     ollamaModel: "",
-    builtinModel: "qwen2.5-0.5b",
+    builtinModel: "smollm2-135m",
   },
   stamps: {
     visible: true,
@@ -147,6 +154,9 @@ export const DEFAULT_SETTINGS: Settings = {
   thumbnails: {
     position: { kind: "middle" },
     cacheTtl: "7d",
+  },
+  ui: {
+    showStatusChip: true,
   },
   debug: false,
 };
@@ -257,6 +267,7 @@ export function normalizeSettings(raw: unknown): Settings {
   const animations = (r["animations"] ?? {}) as Record<string, unknown>;
   const factcheck = (r["factcheck"] ?? {}) as Record<string, unknown>;
   const thumbnails = (r["thumbnails"] ?? {}) as Record<string, unknown>;
+  const ui = (r["ui"] ?? {}) as Record<string, unknown>;
 
   return {
     ai: {
@@ -306,6 +317,9 @@ export function normalizeSettings(raw: unknown): Settings {
         ["1h", "24h", "7d", "30d"],
         DEFAULT_SETTINGS.thumbnails.cacheTtl,
       ),
+    },
+    ui: {
+      showStatusChip: asBool(ui["showStatusChip"], true),
     },
     debug: asBool(r["debug"], false),
   };
@@ -370,6 +384,7 @@ export function mergeSettings(
     animations: { ...current.animations, ...(update.animations ?? {}) },
     factcheck: { ...current.factcheck, ...(update.factcheck ?? {}) },
     thumbnails: { ...current.thumbnails, ...(update.thumbnails ?? {}) },
+    ui: { ...current.ui, ...(update.ui ?? {}) },
     debug: update.debug ?? current.debug,
   };
 }
