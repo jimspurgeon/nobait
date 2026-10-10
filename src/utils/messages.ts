@@ -21,7 +21,8 @@ export type ContentToBackgroundMessage =
   | { type: "VALIDATE_GEMINI_KEY"; key: string }
   | { type: "nobait:clear-thumb-cache" }
   | { type: "nobait:fetch-sprite"; url: string }
-  | { type: "GET_WASM_STATUS" };
+  | { type: "GET_WASM_STATUS" }
+  | { type: "KEEPALIVE_PING" };
 
 /** Message types sent from background to content script */
 export type BackgroundToContentMessage =
@@ -54,6 +55,10 @@ export interface MessageResponse<T = unknown> {
  * OnMessageListenerAsync pattern), so `sendMessage` resolves with the
  * listener's resolved value directly — no sendResponse callback round
  * trip, identical shape on Firefox and Chrome.
+ *
+ * For EVALUATE_VIDEO, starts a background keepalive ping loop (every 10s)
+ * to prevent Firefox event-page idle teardown. The background side treats
+ * KEEPALIVE_PING as a cheap ack that resets the idle timer (issue #8).
  */
 export async function sendToBackground<T>(
   message: ContentToBackgroundMessage,
@@ -63,5 +68,21 @@ export async function sendToBackground<T>(
     throw new Error("[nobait] No runtime message API available");
   }
 
-  return (await runtimeApi.sendMessage(message)) as MessageResponse<T>;
+  // Start keepalive ping loop for slow EVALUATE_VIDEO calls.
+  let keepaliveInterval: ReturnType<typeof setInterval> | null = null;
+  if (message.type === "EVALUATE_VIDEO") {
+    keepaliveInterval = setInterval(() => {
+      void Promise.resolve(runtimeApi.sendMessage({ type: "KEEPALIVE_PING" })).catch(() => {
+        /* background may be shutting down — fine */
+      });
+    }, 10_000);
+  }
+
+  try {
+    return (await runtimeApi.sendMessage(message)) as MessageResponse<T>;
+  } finally {
+    if (keepaliveInterval !== null) {
+      clearInterval(keepaliveInterval);
+    }
+  }
 }
