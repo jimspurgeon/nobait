@@ -190,9 +190,12 @@ function scanAndProcess(): void {
 async function processTitle(titleEl: HTMLElement): Promise<void> {
   const anchor = titleEl.closest("a[href]");
   const href = anchor?.getAttribute("href") || "";
-  const videoId = extractVideoId(
-    href.startsWith("/") ? `https://www.youtube.com${href}` : href,
-  );
+  // Card titles sit inside a /watch link; the watch-page h1 does not —
+  // fall back to the page URL (or its canonical form) for that case.
+  const videoId =
+    extractVideoId(
+      href.startsWith("/") ? `https://www.youtube.com${href}` : href,
+    ) ?? extractVideoId(location.href);
   const title = escapeDomText(titleEl.textContent || "");
 
   if (!videoId || !title) return;
