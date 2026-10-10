@@ -38,7 +38,7 @@ export class EvaluationScheduler {
   /** Listeners for incremental (streaming) results */
   private resultListeners: Set<(result: StampResult) => void> = new Set();
 
-  /** Use getInstance() in application code; constructor is public for tests */
+  // eslint-disable-next-line @typescript-eslint/no-useless-constructor -- public for tests
   constructor() {}
 
   static getInstance(): EvaluationScheduler {
@@ -124,7 +124,11 @@ export class EvaluationScheduler {
     const handledVideoIds = new Set<string>();
 
     try {
-      const provider = await aiProviderFactory.initialize({});
+      // Reuse the background-applied provider; initialize({}) would reset to
+      // defaults and silently swap e.g. builtin/smollm2-135m back to qwen.
+      const provider =
+        aiProviderFactory.getProvider() ??
+        (await aiProviderFactory.initialize({}));
 
       // Chunk into groups of 20. The canonical AIProvider interface (P4)
       // yields AnalysisResults incrementally via an async iterable; each

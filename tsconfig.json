@@ -27,7 +27,8 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@wllama/wllama": ["src/types/wllama.d.ts"]
     }
   },
   "include": ["src", "demo"],

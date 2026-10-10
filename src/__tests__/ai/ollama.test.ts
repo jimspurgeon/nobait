@@ -10,6 +10,7 @@ import {
   OllamaProvider,
   SUGGESTED_MODELS,
   probeEndpoint,
+  validateBaseUrl,
 } from "../../ai/ollama.js";
 import type { VideoSignal } from "../../content/signals.js";
 import type { AnalysisResult } from "../../ai/types.js";
@@ -153,14 +154,12 @@ describe("OllamaProvider", () => {
   });
 
   test("HTTP error status → descriptive Error", async () => {
-    const fetchFn = vi
-      .fn()
-      .mockResolvedValue(
-        new Response("<html>Bad Gateway</html>", {
-          status: 502,
-          statusText: "Bad Gateway",
-        }),
-      );
+    const fetchFn = vi.fn().mockResolvedValue(
+      new Response("<html>Bad Gateway</html>", {
+        status: 502,
+        statusText: "Bad Gateway",
+      }),
+    );
     const p = new OllamaProvider({ model: "m", fetchFn });
     await expect(collect(p.analyzeBatch(mkBatch(1)))).rejects.toThrow(
       /HTTP 502/,
@@ -284,5 +283,54 @@ describe("probeEndpoint()", () => {
   test("resolves false on unreachable endpoint", async () => {
     const fetchFn = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
     expect(await probeEndpoint("http://nowhere:1/", fetchFn)).toBe(false);
+  });
+});
+
+describe("validateBaseUrl() — SSRF guard", () => {
+  test("accepts plain http origins and strips path/trailing slash", () => {
+    const v = validateBaseUrl("http://localhost:11434/");
+    expect("origin" in v && v.origin).toBe("http://localhost:11434");
+  });
+
+  test("accepts https origins", () => {
+    const v = validateBaseUrl("https://my-server.example.com:8443/ollama");
+    expect("origin" in v && v.origin).toBe(
+      "https://my-server.example.com:8443",
+    );
+  });
+
+  test("rejects non-http(s) schemes (file:, ftp:, chrome:)", () => {
+    for (const bad of [
+      "file:///etc/passwd",
+      "ftp://host/x",
+      "chrome://settings",
+    ]) {
+      const v = validateBaseUrl(bad);
+      expect("error" in v).toBe(true);
+      expect("error" in v ? v.error.message : "").toMatch(
+        /scheme must be http or https/,
+      );
+    }
+  });
+
+  test("rejects URLs with embedded credentials", () => {
+    const v = validateBaseUrl("http://user:secret@localhost:11434");
+    expect("error" in v).toBe(true);
+    expect("error" in v ? v.error.message : "").toMatch(/credentials/);
+  });
+
+  test("rejects unparseable URLs", () => {
+    const v = validateBaseUrl("not a url");
+    expect("error" in v).toBe(true);
+    expect("error" in v ? v.error.message : "").toMatch(/invalid URL/);
+  });
+
+  test("constructor fails fast on invalid baseUrl", () => {
+    expect(
+      () => new OllamaProvider({ model: "m", baseUrl: "file:///etc" }),
+    ).toThrow(/scheme must be http or https/);
+    expect(
+      () => new OllamaProvider({ model: "m", baseUrl: "http://a:b@host" }),
+    ).toThrow(/credentials/);
   });
 });

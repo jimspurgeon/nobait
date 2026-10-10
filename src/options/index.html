@@ -4,24 +4,59 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>nobait — Options</title>
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <main class="container">
+      <h1>nobait Settings</h1>
+
+      <!-- First-run / zero-config setup banner -->
+      <section class="card setup-banner hidden" id="setup-banner">
+        <h2>🚀 Almost ready</h2>
+        <p id="setup-banner-text">
+          nobait needs an AI backend to rewrite titles &amp; stamp videos.
+          Thumbnails already work — configure an AI below.
+        </p>
+        <div class="setup-actions">
+          <a
+            class="btn primary"
+            href="https://aistudio.google.com/apikey"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Get a free Gemini key ↗</a
+          >
+          <span class="hint"
+            >Free tier is plenty — nobait batches &amp; caches
+            aggressively.</span
+          >
+        </div>
+      </section>
+
       <!-- AI Backend section -->
-      <section class="card">
+      <section class="card" id="ai-backend">
         <h2>AI Backend</h2>
         <div class="field">
           <label for="backend">Provider</label>
           <select id="backend" name="backend">
-            <option value="gemini" selected>Gemini (Google AI Studio)</option>
+            <option value="auto" selected>
+              Auto (Chrome → Gemini → Ollama → Built-in)
+            </option>
+            <option value="chrome">Chrome built-in AI (Gemini Nano)</option>
+            <option value="gemini">Gemini (Google AI Studio)</option>
             <option value="ollama">Ollama / Local server</option>
+            <option value="builtin">
+              Built-in on-device AI (no config needed)
+            </option>
           </select>
           <p class="hint">
-            Uses the free tier of Google AI Studio (gemini-2.5-flash-lite).
+            Auto follows the priority chain: Chrome Prompt API (if available) →
+            Gemini → Ollama → Built-in on-device AI. Manual selection overrides
+            the chain.
           </p>
         </div>
-        <div class="field">
+
+        <!-- Gemini API key field -->
+        <div class="field nested">
           <label for="api-key">Gemini API key</label>
           <input
             type="password"
@@ -32,29 +67,327 @@
           />
           <p class="hint">
             Stored locally in browser.storage.local, encrypted at rest by the
-            browser. Never sent anywhere except
-            generativelanguage.googleapis.com.
+            browser. Only sent to generativelanguage.googleapis.com.
           </p>
         </div>
+
+        <!-- Ollama endpoint fields -->
+        <div class="field nested">
+          <label for="ollama-url">Local endpoint URL</label>
+          <input
+            type="url"
+            id="ollama-url"
+            name="ollama-url"
+            placeholder="http://localhost:11434"
+          />
+        </div>
+
+        <div class="field nested">
+          <label for="ollama-model">Model tag</label>
+          <input
+            type="text"
+            id="ollama-model"
+            name="ollama-model"
+            placeholder="qwen3:0.6b"
+          />
+          <p class="hint">
+            Recommended: a sub-1B model like qwen3:0.6b or llama3.2:1b. Smaller
+            models are faster but less accurate.
+          </p>
+        </div>
+
+        <!-- Built-in WASM backend fields -->
+        <div class="field nested hidden" id="builtin-fields">
+          <label for="builtin-model">Built-in model</label>
+          <select id="builtin-model" name="builtin-model">
+            <option value="smollm2-135m">
+              SmolLM2 135M (default, ~88 MB download)
+            </option>
+            <option value="smollm2-360m">
+              SmolLM2 360M (~370 MB download)
+            </option>
+            <option value="qwen2.5-0.5b">
+              Qwen2.5 0.5B (highest quality, ~470 MB download)
+            </option>
+          </select>
+          <p class="hint">
+            The model downloads from HuggingFace on first use and is cached
+            locally in your browser (OPFS). No account, no key, nothing leaves
+            your machine afterwards.
+          </p>
+          <div
+            class="hidden"
+            id="builtin-download"
+            role="progressbar"
+            aria-label="Model download progress"
+          >
+            <div class="progress-track">
+              <div id="builtin-progress-bar"></div>
+            </div>
+            <span id="builtin-progress-text" class="hint"></span>
+          </div>
+          <p class="hint" id="builtin-runtime-note" role="status"></p>
+        </div>
+
         <div class="actions">
-          <button id="save-key" class="btn primary">Save API Key</button>
-          <span id="key-status" class="status"></span>
+          <button id="save-ai" class="btn primary">Save AI Settings</button>
+          <span id="ai-status" class="status"></span>
+        </div>
+
+        <div class="provider-badge" id="provider-badge">
+          Currently using: <strong id="current-provider">Auto</strong>
+        </div>
+      </section>
+
+      <!-- Frame position section -->
+      <section class="card" id="thumbnail-settings">
+        <h2>Thumbnail Frame Position</h2>
+        <div class="field">
+          <label for="frame-position">Source frame</label>
+          <select id="frame-position" name="frame-position">
+            <option value="start">Beginning of video</option>
+            <option value="middle" selected>Middle of video</option>
+            <option value="end">End of video</option>
+            <option value="random">Random (deterministic per video)</option>
+            <option value="percent">Custom percentage</option>
+          </select>
+          <p class="hint">
+            Frames are pulled from YouTube's storyboard sprite sheets — no
+            additional bandwidth beyond what the sprite tiles require.
+          </p>
+        </div>
+
+        <!-- Percent slider (hidden unless "percent" is selected) -->
+        <div class="field nested hidden" id="percent-slider-container">
+          <label for="percent-value">Percentage position</label>
+          <input
+            type="range"
+            id="percent-value"
+            name="percent-value"
+            min="0"
+            max="100"
+            value="50"
+          />
+          <output for="percent-value" id="percent-output">50%</output>
+        </div>
+      </section>
+
+      <!-- Stamp settings section -->
+      <section class="card" id="stamp-settings">
+        <h2>Credibility Stamps</h2>
+
+        <div class="field">
+          <label
+            ><input type="checkbox" id="stamps-visible" /> Show stamps</label
+          >
+          <p class="hint">
+            When enabled, badges appear next to video titles indicating whether
+            the content is legitimate, exaggerated, misleading, etc.
+          </p>
+        </div>
+
+        <div class="field">
+          <label for="stamp-placement">Placement</label>
+          <select id="stamp-placement" name="stamp-placement">
+            <option value="after-title" selected>After title</option>
+            <option value="before-title">Before title</option>
+          </select>
+        </div>
+
+        <!-- Per-tier toggles -->
+        <fieldset class="nested">
+          <legend>Enable per tier</legend>
+          <div class="tier-row">
+            <label
+              ><input type="checkbox" data-tier="legitimate" checked />
+              Legitimate (✓)</label
+            >
+            <label
+              ><input type="checkbox" data-tier="exaggerated" checked />
+              Exaggerated (!)</label
+            >
+            <label
+              ><input type="checkbox" data-tier="misleading" checked />
+              Misleading (✗)</label
+            >
+            <label
+              ><input type="checkbox" data-tier="clickbait" checked /> Clickbait
+              (🎣)</label
+            >
+            <label
+              ><input type="checkbox" data-tier="fake" checked /> Fake
+              (☠️)</label
+            >
+            <label
+              ><input type="checkbox" data-tier="unsure" checked /> Unsure
+              (?)</label
+            >
+          </div>
+        </fieldset>
+
+        <div class="actions">
+          <button id="save-stamps" class="btn primary">
+            Save Stamp Settings
+          </button>
+          <span id="stamp-status" class="status"></span>
+        </div>
+      </section>
+
+      <!-- UI settings section -->
+      <section class="card" id="ui-settings">
+        <h2>User Interface</h2>
+
+        <div class="field">
+          <label
+            ><input type="checkbox" id="ui-show-status-chip" /> Show status chip
+            on YouTube pages</label
+          >
+          <p class="hint">
+            Shows a small bottom-right chip displaying model download progress
+            and thumbnail swap status. Dismissible per session.
+          </p>
+        </div>
+      </section>
+
+      <!-- Animation settings section -->
+      <section class="card" id="animation-settings">
+        <h2>Animations</h2>
+
+        <div class="field">
+          <label
+            ><input type="checkbox" id="animations-enabled" /> Enable
+            animations</label
+          >
+          <p class="hint">
+            Title decode effect, thumbnail pixel-dissolve, and stamp pop-in. The
+            system respects your OS `prefers-reduced-motion` setting.
+          </p>
+        </div>
+
+        <div class="field">
+          <label for="anim-intensity">Animation intensity</label>
+          <select id="anim-intensity" name="anim-intensity">
+            <option value="off">Off</option>
+            <option value="subtle">Subtle</option>
+            <option value="normal" selected>Normal</option>
+            <option value="full">Full</option>
+          </select>
+          <p class="hint">
+            Subtle reduces duration; full keeps all decorative flourishes
+            intact.
+          </p>
         </div>
       </section>
 
       <!-- Cache section -->
-      <section class="card">
+      <section class="card" id="cache-settings">
         <h2>Cache</h2>
-        <p class="hint">
-          Analyses are cached in IndexedDB for 7 days. Negative entries (videos
-          with no usable result) expire after 24 hours.
-        </p>
+
+        <div class="field">
+          <label for="cache-ttl">Positive analysis TTL</label>
+          <select id="cache-ttl" name="cache-ttl">
+            <option value="1h">1 hour</option>
+            <option value="24h">24 hours</option>
+            <option value="7d" selected>7 days</option>
+            <option value="30d">30 days</option>
+          </select>
+          <p class="hint">
+            Analyses are stored in IndexedDB. Negative entries (videos with no
+            usable result) always expire after 24 hours regardless of this
+            setting.
+          </p>
+        </div>
+
         <div class="actions">
-          <button id="clear-cache" class="btn danger">Clear Cache</button>
+          <button id="clear-cache" class="btn danger">Clear All Cache</button>
           <span id="cache-status" class="status"></span>
         </div>
       </section>
+
+      <!-- Channel allowlist/blocklist -->
+      <section class="card" id="channel-settings">
+        <h2>Channels</h2>
+
+        <!-- Allowlist -->
+        <div class="nested">
+          <h3>Allowlist</h3>
+          <p class="hint">
+            Channels exempt from rewriting/stamping — their original titles and
+            thumbnails always shown. Enter channel name or URL and press Enter.
+          </p>
+          <div class="tag-list" id="allowlist-tags"></div>
+          <div class="tag-input-row">
+            <input
+              type="text"
+              id="allowlist-input"
+              placeholder="Channel name or URL"
+            />
+            <button id="add-allowlist" class="btn secondary">Add</button>
+          </div>
+        </div>
+
+        <!-- Blocklist -->
+        <div class="nested">
+          <h3>Blocklist</h3>
+          <p class="hint">
+            Channels whose videos are always aggressively flagged as potentially
+            misleading. Same input method as allowlist.
+          </p>
+          <div class="tag-list" id="blocklist-tags"></div>
+          <div class="tag-input-row">
+            <input
+              type="text"
+              id="blocklist-input"
+              placeholder="Channel name or URL"
+            />
+            <button id="add-blocklist" class="btn warning">Add</button>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="save-channels" class="btn primary">
+            Save Channel Lists
+          </button>
+          <span id="channel-status" class="status"></span>
+        </div>
+      </section>
+
+      <!-- Fact-check layer -->
+      <section class="card" id="factcheck-settings">
+        <h2>Fact Check Layer</h2>
+
+        <div class="field">
+          <label
+            ><input type="checkbox" id="factcheck-enabled" /> Enable ClaimReview
+            lookups</label
+          >
+          <p class="hint">
+            When enabled, Google Fact Check Tools API is queried for videos
+            rated FAKE or covering news/health topics. Lookups race in parallel
+            (400 ms timeout) and never delay the swap.
+          </p>
+        </div>
+
+        <div class="field">
+          <label for="factcheck-api-key">Fact Check API key</label>
+          <input
+            type="password"
+            id="factcheck-api-key"
+            name="factcheck-api-key"
+            placeholder="Paste API key here"
+            autocomplete="off"
+          />
+        </div>
+
+        <div class="actions">
+          <button id="save-factcheck" class="btn primary">
+            Save Fact Check Settings
+          </button>
+          <span id="factcheck-status" class="status"></span>
+        </div>
+      </section>
     </main>
+
     <script type="module" src="./index.ts"></script>
   </body>
 </html>

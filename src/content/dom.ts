@@ -19,7 +19,7 @@ export const SELECTORS = {
   THUMBNAIL_IMG: "ytd-thumbnail img, ytd-thumbnail #img, img#img",
   /** Video titles on cards (P3 stamp pipeline). */
   TITLE:
-    "#video-title, ytd-rich-item-renderer #video-title, ytd-video-renderer #video-title, #text.ytd-video-renderer",
+    "#video-title, ytd-rich-item-renderer #video-title, ytd-video-renderer #video-title, #text.ytd-video-renderer, h1.ytd-watch-metadata",
   /** Watch-page description (P3 signal extraction). */
   WATCH_LINK: 'a[href*="/watch"]',
   /** Canonical link element (P3). */
