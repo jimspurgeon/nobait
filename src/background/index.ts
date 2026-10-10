@@ -62,16 +62,20 @@ class BackgroundWorker {
       // Initialize cache database
       await cacheDB.init();
 
-      // Initialize AI provider factory from unified settings (may download
-      // wllama model — caller starts a keepalive ping loop to survive MV3
-      // event-page timeout, see issue #8).
-      const settings = await getSettings();
-      await this.applyAiSettings(settings);
-
-      // Live settings: re-initialize the provider when AI config changes.
+      // Watch for settings changes BEFORE the (slow) initial apply: the
+      // Ollama autodetect probe inside applyAiSettings can take seconds,
+      // and a storage write landing in that window must not be missed
+      // (issue #9). Applies are serialized so a change arriving mid-startup
+      // can't interleave with the initial provider build.
+      let settingsWrite = Promise.resolve();
+      const applySerialized = (s: Awaited<ReturnType<typeof getSettings>>) => {
+        settingsWrite = settingsWrite.then(() => this.applyAiSettings(s));
+        return settingsWrite;
+      };
       onSettingsChanged((next) => {
-        void this.applyAiSettings(next);
+        void applySerialized(next).catch(console.error);
       });
+      await applySerialized(await getSettings());
 
       // Periodic cleanup (hourly)
       setInterval(() => cacheDB.cleanup().catch(console.error), 60 * 60 * 1000);
