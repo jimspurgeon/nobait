@@ -175,6 +175,7 @@ export class AIProviderFactory {
     geminiApiKey?: string;
     ollamaUrl?: string;
     ollamaModel?: string;
+    builtinModel?: BuiltinModelId;
     useChromeAI?: boolean;
   } | null = null;
 
@@ -208,11 +209,15 @@ export class AIProviderFactory {
     // An empty config (e.g. the scheduler's flush-time re-init) inherits
     // the last settings-driven config so an autodetected local Ollama
     // survives instead of being wiped back to "no provider".
+    // NOTE: builtinModel counts as "configured" — a settings change that
+    // only switches the built-in model must rebuild the WASM provider,
+    // not replay the stale lastAppliedConfig (issue #10).
     if (
       config.preferredProvider === undefined &&
       config.geminiApiKey === undefined &&
       config.ollamaUrl === undefined &&
       config.ollamaModel === undefined &&
+      config.builtinModel === undefined &&
       this.lastAppliedConfig !== null
     ) {
       config = { ...this.lastAppliedConfig };
