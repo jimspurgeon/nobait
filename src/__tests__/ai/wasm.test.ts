@@ -40,17 +40,27 @@ function makeWllama(
         opts.onLoad?.();
       },
     ),
-    // Real wllama shape: single options object, response parsed JSON
-    // with .content — mirrored here so the stub can't drift from prod.
+    // Real wllama 3.8 shape: OpenAI-compatible response — chat text lives in
+    // choices[0].message.content (raw completion: choices[0].text). Mirrored
+    // here so the stub can't drift from prod.
     createChatCompletion: vi.fn(
       async (options: {
         messages: Array<{ role: string; content: string }>;
       }) =>
         opts.reply
-          ? { content: opts.reply(options.messages) }
-          : { content: "[]" },
+          ? {
+              choices: [
+                {
+                  message: {
+                    role: "assistant",
+                    content: opts.reply(options.messages),
+                  },
+                },
+              ],
+            }
+          : { choices: [{ message: { role: "assistant", content: "[]" } }] },
     ),
-    createCompletion: vi.fn(async () => ({ content: "[]" })),
+    createCompletion: vi.fn(async () => ({ choices: [{ text: "[]" }] })),
     exit: vi.fn(async () => {}),
   };
 }
@@ -102,8 +112,12 @@ describe("WasmProvider", () => {
       loadModelFromUrl: vi.fn(async () => {
         if (fail) throw new Error("download interrupted");
       }),
-      createChatCompletion: vi.fn(async () => ({ content: modelJson(["r"]) })),
-      createCompletion: vi.fn(async () => ({ content: "[]" })),
+      createChatCompletion: vi.fn(async () => ({
+        choices: [
+          { message: { role: "assistant", content: modelJson(["r"]) } },
+        ],
+      })),
+      createCompletion: vi.fn(async () => ({ choices: [{ text: "[]" }] })),
       exit: vi.fn(async () => {}),
     };
     const p = new WasmProvider({
@@ -147,6 +161,25 @@ describe("WasmProvider", () => {
     expect(out.map((r) => r.videoId)).toEqual(["a", "b", "c", "d"]);
     expect(out[0]!.stamp).toBe(StampTier.LEGITIMATE);
     expect(call).toBe(2); // 4 videos / chunk size 3
+  });
+
+  // Regression: wllama 3.8 resolves createChatCompletion to OpenAI-shaped
+  // {choices:[{message:{content}}]} — extractText used to read top-level
+  // .content (only the raw-createCompletion shape) and silently return "",
+  // so every chat result degraded to UNSURE with the original title.
+  test("chat responses in wllama 3.8 OpenAI shape are extracted (extractText regression)", async () => {
+    const wllama = makeWllama({
+      reply: () => modelJson(["a"]),
+    });
+    const p = new WasmProvider({
+      loader: async () => wllama,
+      runtimeSupported: true,
+    });
+    const out = [];
+    for await (const r of p.analyzeBatch([signal("a", "t")])) out.push(r);
+    expect(out).toHaveLength(1);
+    expect(out[0]!.stamp).toBe(StampTier.LEGITIMATE);
+    expect(out[0]!.rewrittenTitle).not.toBe("t");
   });
 
   test("chunks capped at WASM_BATCH_CHUNK", async () => {
@@ -233,7 +266,7 @@ describe("WasmProvider", () => {
         throw chatErr;
       }),
       createCompletion: vi.fn(
-        async () => ({ content: modelJson(["fb"]) }) as unknown,
+        async () => ({ choices: [{ text: modelJson(["fb"]) }] }) as unknown,
       ),
       exit: vi.fn(async () => {}),
     };
@@ -255,8 +288,10 @@ describe("WasmProvider", () => {
       loadModelFromUrl: vi.fn(async () => {
         throw new Error("network down");
       }),
-      createChatCompletion: vi.fn(async () => ({ content: "[]" })),
-      createCompletion: vi.fn(async () => ({ content: "[]" })),
+      createChatCompletion: vi.fn(async () => ({
+        choices: [{ message: { role: "assistant", content: "[]" } }],
+      })),
+      createCompletion: vi.fn(async () => ({ choices: [{ text: "[]" }] })),
       exit: vi.fn(async () => {}),
     };
     const p = new WasmProvider({
@@ -324,13 +359,17 @@ describe("WasmProvider", () => {
             const ids = [
               ...userMsg!.content.matchAll(/"id"\s*:\s*"([^"]+)"/g),
             ].map((m) => m[1]!);
-            return { content: modelJson(ids) };
+            return {
+              choices: [
+                { message: { role: "assistant", content: modelJson(ids) } },
+              ],
+            };
           } finally {
             active--;
           }
         },
       ),
-      createCompletion: vi.fn(async () => ({ content: "[]" })),
+      createCompletion: vi.fn(async () => ({ choices: [{ text: "[]" }] })),
       exit: vi.fn(async () => {}),
     };
     const p = new WasmProvider({

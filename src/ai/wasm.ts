@@ -51,9 +51,26 @@ export interface WllamaLike {
   exit(): Promise<void>;
 }
 
-/** Pull the generated text out of a llama.cpp completion response. */
+/** Pull the generated text out of a llama.cpp completion response.
+ * wllama 3.8 returns OpenAI-shaped responses:
+ * { choices: [{ message: { content?: string } }] } for chat,
+ * or a string for raw completions. */
 function extractText(result: unknown): string {
   if (typeof result === "string") return result;
+  if (!result) return "";
+  // Chat completion (preferred): choices[0].message.content
+  const choices = (result as { choices?: unknown[] }).choices;
+  if (Array.isArray(choices) && choices[0]) {
+    const choice = choices[0] as {
+      message?: { content?: unknown };
+      text?: unknown;
+    };
+    const content = choice.message?.content;
+    if (typeof content === "string") return content;
+    // Raw completion (OpenAI text shape): choices[0].text
+    if (typeof choice.text === "string") return choice.text;
+  }
+  // Legacy raw completion: top-level content
   const content = (result as { content?: unknown } | null)?.content;
   return typeof content === "string" ? content : "";
 }
@@ -254,9 +271,12 @@ export class WasmProvider implements AIProvider {
         // n_parallel: 1 — we complete serially; the default 4 splits the
         // KV cache across slots (tiny models: 512 train ctx ÷ 4 = 128
         // usable tokens → "request exceeds the available context size").
+        // n_threads: left at wllama's default (hardwareConcurrency / 2 on
+        // the multithread build). Forcing 1 made a single ~500-token
+        // completion take 84+s, and a page-load flood of ~20 chunks
+        // serialized to nearly half an hour of inference.
         await wllama.loadModelFromUrl(this.modelUrls[0] ?? "", {
           n_ctx: 4096,
-          n_threads: 1,
           n_parallel: 1,
           parallelDownloads: 1,
           ...(this.onProgress ? { progressCallback: this.onProgress } : {}),
@@ -318,12 +338,11 @@ export class WasmProvider implements AIProvider {
         // Both go through runExclusive: wllama is single-tenant.
         const completion: string = await this.runExclusive(async () => {
           try {
-            return extractText(
-              await wllama.createChatCompletion({
-                messages: prompt,
-                ...genOpts,
-              }),
-            );
+            const raw = await wllama.createChatCompletion({
+              messages: prompt,
+              ...genOpts,
+            });
+            return extractText(raw);
           } catch (err) {
             trace(`analyzeBatch: chat failed, raw fallback: ${String(err)}`);
             return extractText(
