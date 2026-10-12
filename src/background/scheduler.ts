@@ -138,7 +138,9 @@ export class EvaluationScheduler {
       // video's result is emitted + cached the moment it arrives.
       for (let i = 0; i < inputs.length; i += this.MAX_BATCH_SIZE) {
         const chunk = inputs.slice(i, i + this.MAX_BATCH_SIZE);
-        trace(`FLUSH: chunk ${i / this.MAX_BATCH_SIZE} of ${chunk.length} videos`);
+        trace(
+          `FLUSH: chunk ${i / this.MAX_BATCH_SIZE} of ${chunk.length} videos`,
+        );
         const chunkQueue = queued.filter((req) =>
           chunk.some((c) => c.videoId === req.input.videoId),
         );
@@ -174,7 +176,9 @@ export class EvaluationScheduler {
           );
           if (req && !handledVideoIds.has(partial.videoId)) {
             handledVideoIds.add(partial.videoId);
-            trace(`FLUSH: delivering ${partial.videoId} stamp=${partial.stamp}`);
+            trace(
+              `FLUSH: delivering ${partial.videoId} stamp=${partial.stamp}`,
+            );
             await this.deliverResult(req, partial);
           }
         }

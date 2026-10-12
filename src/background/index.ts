@@ -393,7 +393,9 @@ class BackgroundWorker {
 
     const startedAt = performance.now();
     const result = await scheduler.evaluate(input);
-    trace(`handleEvaluateVideo: scheduler done in ${Math.round(performance.now() - startedAt)}ms`);
+    trace(
+      `handleEvaluateVideo: scheduler done in ${Math.round(performance.now() - startedAt)}ms`,
+    );
     const inferenceMs = Math.round(performance.now() - startedAt);
     const factCheck = await factCheckPromise;
 
