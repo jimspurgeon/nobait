@@ -271,13 +271,17 @@ export class WasmProvider implements AIProvider {
         // n_parallel: 1 — we complete serially; the default 4 splits the
         // KV cache across slots (tiny models: 512 train ctx ÷ 4 = 128
         // usable tokens → "request exceeds the available context size").
-        // n_threads: left at wllama's default (hardwareConcurrency / 2 on
-        // the multithread build). Forcing 1 made a single ~500-token
-        // completion take 84+s, and a page-load flood of ~20 chunks
-        // serialized to nearly half an hour of inference.
+        // n_threads: 1 — REQUIRED in the extension context. wllama's
+        // multithread mode is detected in the background page
+        // (isSupportMultiThread) but its pthread workers spawn from inside
+        // the static ai-worker.js (emscripten pthreadMainJs =
+        // self.location.href) and never start there, so every completion
+        // hangs forever (#24). Single-thread is slow (~84s/chunk) but
+        // completes; see #24 for the follow-up.
         await wllama.loadModelFromUrl(this.modelUrls[0] ?? "", {
           n_ctx: 4096,
           n_parallel: 1,
+          n_threads: 1,
           parallelDownloads: 1,
           ...(this.onProgress ? { progressCallback: this.onProgress } : {}),
         });
