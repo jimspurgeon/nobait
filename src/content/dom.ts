@@ -10,16 +10,30 @@ import { extractVideoId } from "../utils/url";
 export { extractVideoId };
 
 export const SELECTORS = {
-  /** Grid / list items hosting a video card (P2 thumbnail pipeline). */
+  /**
+   * Grid / list items hosting a video card (P2 thumbnail pipeline).
+   * NOTE: YouTube migrated the home feed from ytd-*-renderer cards to
+   * `yt-lockup-view-model` (Oct 2026); keep both shapes.
+   */
   GRID_ITEM:
-    "ytd-rich-item-renderer, ytd-video-renderer, ytd-compact-video-renderer",
+    "yt-lockup-view-model, ytd-rich-item-renderer, ytd-video-renderer, ytd-compact-video-renderer",
   /** Thumbnail anchor inside a card. */
-  THUMBNAIL_LINK: "a#thumbnail.yt-simple-endpoint, a#thumbnail",
-  /** Thumbnail image inside a card. */
-  THUMBNAIL_IMG: "ytd-thumbnail img, ytd-thumbnail #img, img#img",
-  /** Video titles on cards (P3 stamp pipeline). */
+  THUMBNAIL_LINK:
+    "a#thumbnail.yt-simple-endpoint, a#thumbnail, yt-lockup-view-model a[href*='/watch']",
+  /**
+   * Thumbnail image inside a card. The ytimg.com/vi filter excludes channel
+   * avatars (yt3.ggpht.com) that also live inside lockup view models.
+   */
+  THUMBNAIL_IMG:
+    "ytd-thumbnail img, ytd-thumbnail #img, img#img, yt-lockup-view-model img[src*='ytimg.com/vi/']",
+  /**
+   * Video titles on cards (P3 stamp pipeline). In lockup view models the
+   * title anchor (a.ytLockupMetadataViewModelTitle, href=/watch?v=...) sits
+   * inside h3; matching the anchor directly keeps processTitle's
+   * closest('a[href]') working.
+   */
   TITLE:
-    "#video-title, ytd-rich-item-renderer #video-title, ytd-video-renderer #video-title, #text.ytd-video-renderer, h1.ytd-watch-metadata",
+    "yt-lockup-view-model h3 a, #video-title, ytd-rich-item-renderer #video-title, ytd-video-renderer #video-title, #text.ytd-video-renderer, h1.ytd-watch-metadata",
   /** Watch-page description (P3 signal extraction). */
   WATCH_LINK: 'a[href*="/watch"]',
   /** Canonical link element (P3). */

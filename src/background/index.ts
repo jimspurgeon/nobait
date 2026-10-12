@@ -5,6 +5,7 @@ import { GeminiProvider } from "../ai/gemini";
 import { AIInput, StampResult } from "../stamps/types";
 import { evaluateFactCheck, StampTier as FactCheckTier } from "./factcheck";
 import { webext } from "../utils/webext";
+import { trace, getTraces } from "../utils/trace";
 import { detectOllama } from "../ai/autodetect";
 import {
   getWasmStatus,
@@ -122,6 +123,9 @@ class BackgroundWorker {
       // Firefox-native pattern: return a Promise for async responses
       // (OnMessageListenerAsync signature). Chrome also supports this.
       switch (message.type) {
+        case "GET_TRACES":
+          return Promise.resolve({ success: true, traces: getTraces() });
+
         case "EVALUATE_VIDEO":
           // Slow inference/model download: the sending content script polls
           // KEEPALIVE_PING (incoming messages reset Firefox's event-page
@@ -324,6 +328,7 @@ class BackgroundWorker {
    */
   private warmupBuiltin(provider: WasmProvider): Promise<void> {
     if (this.keepaliveId !== null) return Promise.resolve();
+    trace("warmupBuiltin: starting warmup");
     this.keepaliveId = setInterval(() => {
       // Any extension-API call resets the idle timer.
       try {
@@ -337,11 +342,11 @@ class BackgroundWorker {
     return provider
       .warmup()
       .then(() => {
-        console.log("[nobait] builtin model warmed up");
+        trace("warmupBuiltin: warmed up OK");
         done();
       })
       .catch((err: unknown) => {
-        console.warn("[nobait] builtin model warmup failed:", err);
+        trace(`warmupBuiltin: FAILED ${String(err)}`);
         done();
       });
   }
@@ -376,6 +381,7 @@ class BackgroundWorker {
       transcript: payload.transcript,
       chapters: payload.chapters,
     };
+    trace(`handleEvaluateVideo: ${payload.videoId}`);
 
     // Fact-check layer (P6): runs in parallel with AI inference and can
     // only strengthen a FAKE-leaning stamp, never delay or soften it.
@@ -387,6 +393,7 @@ class BackgroundWorker {
 
     const startedAt = performance.now();
     const result = await scheduler.evaluate(input);
+    trace(`handleEvaluateVideo: scheduler done in ${Math.round(performance.now() - startedAt)}ms`);
     const inferenceMs = Math.round(performance.now() - startedAt);
     const factCheck = await factCheckPromise;
 

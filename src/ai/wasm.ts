@@ -16,6 +16,7 @@
  * `opfs-worker.js`) instead of blob: URLs, which Firefox MV3 CSP forbids.
  */
 
+import { trace } from "../utils/trace";
 import type { AnalysisResult, AIProvider, BatchInput } from "./types.js";
 import {
   CLASSIFY_SYSTEM_PROMPT,
@@ -194,6 +195,10 @@ export class WasmProvider implements AIProvider {
 
   private instance: WllamaLike | null = null;
   private loading: Promise<WllamaLike> | null = null;
+  // Serialize inference: wllama with n_parallel: 1 cannot handle concurrent
+  // createChatCompletion() calls on the same instance — they deadlock.
+  // (Each call spawns internal worker threads that contend for llama_state.)
+  private inferenceQueue: Promise<void> = Promise.resolve();
 
   constructor(config: WasmProviderConfig = {}) {
     this.modelUrls = [
@@ -240,8 +245,10 @@ export class WasmProvider implements AIProvider {
     }
 
     this.loading = (async () => {
+      trace("ensureModel: calling loader");
       const wllama = await this.loader();
       try {
+        trace("ensureModel: loader done, loadModelFromUrl");
         // wllama 3.x: single URL string — an array is treated as a source
         // object ({url: undefined}) and rejected as "Invalid model URL".
         // n_parallel: 1 — we complete serially; the default 4 splits the
@@ -254,10 +261,12 @@ export class WasmProvider implements AIProvider {
           parallelDownloads: 1,
           ...(this.onProgress ? { progressCallback: this.onProgress } : {}),
         });
+        trace("ensureModel: loadModelFromUrl done");
         this.instance = wllama;
         return wllama;
       } catch (cause) {
         this.loading = null;
+        trace(`ensureModel: loadModelFromUrl FAILED ${String(cause)}`);
         throw new Error(
           `builtin WASM AI failed to load model from ${this.modelUrls[0]}: ${(cause as Error)?.message ?? cause}`,
         );
@@ -266,40 +275,70 @@ export class WasmProvider implements AIProvider {
     return this.loading;
   }
 
+  /**
+   * Run fn() serialized against every other inference call on this
+   * provider. wllama (n_parallel: 1) is not re-entrant: two overlapping
+   * createChatCompletion/createCompletion calls on one instance deadlock —
+   * both enter the worker job queue and neither ever settles. Concurrent
+   * analyzeBatch() callers (e.g. two scheduler flushes) therefore funnel
+   * through this chain; errors on one item never poison the tail.
+   */
+  private runExclusive<T>(fn: () => Promise<T>): Promise<T> {
+    const result = this.inferenceQueue.then(fn, fn);
+    this.inferenceQueue = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }
+
   async *analyzeBatch(input: BatchInput): AsyncIterable<AnalysisResult> {
     const chunks: VideoSignal[][] = [];
     for (let i = 0; i < input.length; i += WASM_BATCH_CHUNK) {
       chunks.push([...input.slice(i, i + WASM_BATCH_CHUNK)]);
     }
 
+    trace("analyzeBatch: awaiting model");
     const wllama = await this.ensureModel();
+    trace("analyzeBatch: model ready, inferring");
 
     for (const chunk of chunks) {
+      trace(`analyzeBatch: inference chunk of ${chunk.length} videos`);
       try {
         const prompt = [
           { role: "system", content: CLASSIFY_SYSTEM_PROMPT },
           { role: "user", content: buildBatchUserPrompt(chunk) },
         ];
         const genOpts = { max_tokens: this.maxTokens, temperature: 0.3 };
+        trace("analyzeBatch: calling createChatCompletion");
         // Preferred: chat completion (models with a chat template).
         // Fallback: raw completion — base models (no chat template in the
-        // GGUF) make wllama throw on chat-formatted messages; retry with a
+        // GGUF) make wllama throw on chat-formatted runs; retry with a
         // plain prompt so custom/user-supplied base models still work.
-        let completion: string;
-        try {
-          completion = extractText(
-            await wllama.createChatCompletion({ messages: prompt, ...genOpts }),
-          );
-        } catch {
-          completion = extractText(
-            await wllama.createCompletion({
-              prompt: buildRawCompletionPrompt(prompt),
-              ...genOpts,
-            }),
-          );
-        }
+        // Both go through runExclusive: wllama is single-tenant.
+        const completion: string = await this.runExclusive(async () => {
+          try {
+            return extractText(
+              await wllama.createChatCompletion({
+                messages: prompt,
+                ...genOpts,
+              }),
+            );
+          } catch (err) {
+            trace(`analyzeBatch: chat failed, raw fallback: ${String(err)}`);
+            return extractText(
+              await wllama.createCompletion({
+                prompt: buildRawCompletionPrompt(prompt),
+                ...genOpts,
+              }),
+            );
+          }
+        });
+        trace(`analyzeBatch: completion received (${completion.length} chars)`);
         yield* parseBatchResponse(completion, chunk);
+        trace("analyzeBatch: chunk parsed");
       } catch (err) {
+        trace(`analyzeBatch: chunk FAILED: ${String(err)}`);
         console.error("[nobait:wasm] chunk analysis failed:", err);
         for (const video of chunk) {
           yield {
