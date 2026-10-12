@@ -297,4 +297,66 @@ describe("WasmProvider", () => {
       .calls[0]![1] as Record<string, unknown>;
     expect(cfg.progressCallback).toBe(onProgress);
   });
+
+  // Regression test for issue #19: wllama (n_parallel: 1) deadlocks when
+  // two createChatCompletion calls overlap on one instance. Two coalescing
+  // windows expiring together used to produce exactly that. runExclusive
+  // must keep max observed concurrency at 1, while both batches still
+  // complete (interleaved chunk-by-chunk) and yield all their results.
+  test("concurrent analyzeBatch calls never overlap inference (issue #19)", async () => {
+    let active = 0;
+    let maxActive = 0;
+    let calls = 0;
+    const wllama: WllamaLike = {
+      loadModelFromUrl: vi.fn(async () => {}),
+      createChatCompletion: vi.fn(
+        async (options: {
+          messages: Array<{ role: string; content: string }>;
+        }) => {
+          active++;
+          maxActive = Math.max(maxActive, active);
+          calls++;
+          try {
+            // One microtask tick each — lets queued fns race if the mutex
+            // is broken; waits for release below otherwise.
+            await Promise.resolve();
+            const userMsg = options.messages.find((m) => m.role === "user");
+            const ids = [
+              ...userMsg!.content.matchAll(/"id"\s*:\s*"([^"]+)"/g),
+            ].map((m) => m[1]!);
+            return { content: modelJson(ids) };
+          } finally {
+            active--;
+          }
+        },
+      ),
+      createCompletion: vi.fn(async () => ({ content: "[]" })),
+      exit: vi.fn(async () => {}),
+    };
+    const p = new WasmProvider({
+      loader: async () => wllama,
+      runtimeSupported: true,
+    });
+
+    const collect = async (ids: string[]) => {
+      const out: string[] = [];
+      for await (const r of p.analyzeBatch(ids.map((id) => signal(id, id)))) {
+        out.push(r.videoId);
+      }
+      return out;
+    };
+
+    // 4 videos = 2 chunks each (WASM_BATCH_CHUNK = 3), so two generators
+    // put 4 serialized calls on the inference queue, interleaved at chunk
+    // granularity but never overlapping.
+    const [outA, outB] = await Promise.all([
+      collect(["a1", "a2", "a3", "a4"]),
+      collect(["b1", "b2", "b3", "b4"]),
+    ]);
+
+    expect(calls).toBe(4);
+    expect(maxActive).toBe(1);
+    expect(outA).toEqual(["a1", "a2", "a3", "a4"]);
+    expect(outB).toEqual(["b1", "b2", "b3", "b4"]);
+  });
 });
