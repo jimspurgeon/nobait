@@ -8,6 +8,8 @@ const mockState = vi.hoisted(() => ({
 
 vi.mock("../../ai/factory", () => ({
   aiProviderFactory: {
+    // Scheduler prefers getProvider(); null forces fallback to initialize.
+    getProvider: vi.fn().mockReturnValue(null),
     initialize: vi.fn().mockImplementation(async () => ({
       name: "gemini-mock",
       supportsStreaming: true,

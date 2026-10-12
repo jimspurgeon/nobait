@@ -56,6 +56,44 @@ function err(context: string, detail: string): Error {
 }
 
 /**
+ * SSRF guard: validate a user-configured base URL before any request is
+ * made against it.
+ *
+ * Rules:
+ * - must parse as an absolute URL
+ * - scheme must be http or https (blocks file:, chrome:, etc.)
+ * - no embedded credentials (user:pass@host)
+ *
+ * @returns the normalized origin (scheme + host + port), or an Error with
+ * a descriptive message when the URL must be rejected.
+ */
+export function validateBaseUrl(
+  raw: string,
+  context = "constructor",
+): { origin: string } | { error: Error } {
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return { error: err(context, `invalid URL: ${JSON.stringify(raw)}`) };
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return {
+      error: err(
+        context,
+        `scheme must be http or https, got ${parsed.protocol}//`,
+      ),
+    };
+  }
+  if (parsed.username !== "" || parsed.password !== "") {
+    return {
+      error: err(context, "credentials in URL are not allowed"),
+    };
+  }
+  return { origin: parsed.origin };
+}
+
+/**
  * Local Ollama provider. Streaming note: we intentionally consume the
  * non-streaming chat-completions call and yield results per video after
  * parse — most local servers buffer SSE anyway, and one round trip for a
@@ -77,8 +115,13 @@ export class OllamaProvider implements AIProvider {
     }
     this.model = config.model;
     this.name = `ollama:${config.model}`;
-    // Trim trailing slash so `baseUrl + '/v1/...'` never doubles up.
-    this.baseUrl = (config.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
+    // SSRF guard: reject non-http(s) schemes and credential-bearing URLs
+    // before anything is ever fetched. Path/query/hash are dropped so the
+    // provider only ever talks to the bare origin.
+    const rawUrl = config.baseUrl ?? DEFAULT_BASE_URL;
+    const validated = validateBaseUrl(rawUrl);
+    if ("error" in validated) throw validated.error;
+    this.baseUrl = validated.origin;
     this.timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.fetchFn = config.fetchFn ?? fetch;
     if (this.timeoutMs <= 0) {
@@ -152,7 +195,7 @@ export class OllamaProvider implements AIProvider {
       if (cause instanceof TypeError) {
         throw err(
           "network error",
-          `cannot reach ${this.baseUrl} (is the local server running?)`,
+          `cannot reach ${this.baseUrl}. If using a local Ollama server, ensure it is running and that the extension has been granted permission to access http://localhost.`,
         );
       }
       throw cause instanceof Error
@@ -190,10 +233,12 @@ export async function probeEndpoint(
   fetchFn: typeof fetch = fetch,
   timeoutMs = 3_000,
 ): Promise<boolean> {
+  const validated = validateBaseUrl(baseUrl, "probeEndpoint");
+  if ("error" in validated) throw validated.error;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetchFn(`${baseUrl.replace(/\/+$/, "")}/v1/models`, {
+    const res = await fetchFn(`${validated.origin}/v1/models`, {
       signal: controller.signal,
     });
     return res.ok;

@@ -1,4 +1,5 @@
 import { AIInput, StampResult } from "../stamps/types";
+import { trace } from "../utils/trace";
 import { aiProviderFactory } from "../ai/factory";
 import { MODEL_VERSION } from "../ai/gemini";
 import { parseStampTier } from "../ai/classify";
@@ -38,7 +39,7 @@ export class EvaluationScheduler {
   /** Listeners for incremental (streaming) results */
   private resultListeners: Set<(result: StampResult) => void> = new Set();
 
-  /** Use getInstance() in application code; constructor is public for tests */
+  // eslint-disable-next-line @typescript-eslint/no-useless-constructor -- public for tests
   constructor() {}
 
   static getInstance(): EvaluationScheduler {
@@ -118,19 +119,28 @@ export class EvaluationScheduler {
     const inputs = [...this.pending.values()];
     this.pending.clear();
 
+    trace(`FLUSH START count=${inputs.length}`);
     if (inputs.length === 0) return;
 
     // Videos already delivered in this flush (streaming may repeat them).
     const handledVideoIds = new Set<string>();
 
     try {
-      const provider = await aiProviderFactory.initialize({});
+      // Reuse the background-applied provider; initialize({}) would reset to
+      // defaults and silently swap e.g. builtin/smollm2-135m back to qwen.
+      const provider =
+        aiProviderFactory.getProvider() ??
+        (await aiProviderFactory.initialize({}));
+      trace(`FLUSH: provider acquired (${provider.name})`);
 
       // Chunk into groups of 20. The canonical AIProvider interface (P4)
       // yields AnalysisResults incrementally via an async iterable; each
       // video's result is emitted + cached the moment it arrives.
       for (let i = 0; i < inputs.length; i += this.MAX_BATCH_SIZE) {
         const chunk = inputs.slice(i, i + this.MAX_BATCH_SIZE);
+        trace(
+          `FLUSH: chunk ${i / this.MAX_BATCH_SIZE} of ${chunk.length} videos`,
+        );
         const chunkQueue = queued.filter((req) =>
           chunk.some((c) => c.videoId === req.input.videoId),
         );
@@ -145,7 +155,9 @@ export class EvaluationScheduler {
           }
         >();
 
+        trace(`FLUSH: entering for-await loop over analyzeBatch`);
         for await (const result of provider.analyzeBatch(chunk)) {
+          trace(`FLUSH: yielded result for ${result.videoId}`);
           const partial: {
             videoId: string;
             rewrittenTitle: string;
@@ -164,6 +176,9 @@ export class EvaluationScheduler {
           );
           if (req && !handledVideoIds.has(partial.videoId)) {
             handledVideoIds.add(partial.videoId);
+            trace(
+              `FLUSH: delivering ${partial.videoId} stamp=${partial.stamp}`,
+            );
             await this.deliverResult(req, partial);
           }
         }
@@ -183,6 +198,7 @@ export class EvaluationScheduler {
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
+      trace(`FLUSH: batch evaluation FAILED: ${errorMessage}`);
       console.error("[nobait] Batch evaluation failed:", errorMessage);
 
       // Reject all pending requests

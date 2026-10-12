@@ -2,6 +2,8 @@
  * Message protocol between content script and background worker
  */
 
+import { webext } from "./webext";
+
 /** Message types sent from content script to background */
 export type ContentToBackgroundMessage =
   | {
@@ -14,7 +16,13 @@ export type ContentToBackgroundMessage =
     }
   | { type: "GET_CACHE_STATUS" }
   | { type: "CLEAR_CACHE" }
-  | { type: "SET_GEMINI_API_KEY"; key: string };
+  | { type: "SET_GEMINI_API_KEY"; key: string }
+  | { type: "GET_PROVIDER_STATUS" }
+  | { type: "VALIDATE_GEMINI_KEY"; key: string }
+  | { type: "nobait:clear-thumb-cache" }
+  | { type: "nobait:fetch-sprite"; url: string }
+  | { type: "GET_WASM_STATUS" }
+  | { type: "KEEPALIVE_PING" };
 
 /** Message types sent from background to content script */
 export type BackgroundToContentMessage =
@@ -41,42 +49,42 @@ export interface MessageResponse<T = unknown> {
 }
 
 /**
- * Send a message to the background worker (from content script)
+ * Send a message to the background worker (from content script).
+ *
+ * The background listener returns Promises (Firefox-native
+ * OnMessageListenerAsync pattern), so `sendMessage` resolves with the
+ * listener's resolved value directly — no sendResponse callback round
+ * trip, identical shape on Firefox and Chrome.
+ *
+ * For EVALUATE_VIDEO, starts a background keepalive ping loop (every 10s)
+ * to prevent Firefox event-page idle teardown. The background side treats
+ * KEEPALIVE_PING as a cheap ack that resets the idle timer (issue #8).
  */
 export async function sendToBackground<T>(
   message: ContentToBackgroundMessage,
 ): Promise<MessageResponse<T>> {
-  const api =
-    typeof browser !== "undefined"
-      ? browser
-      : typeof chrome !== "undefined"
-        ? chrome
-        : null;
-  if (!api?.runtime?.sendMessage) {
+  const runtimeApi = webext.runtime;
+  if (!runtimeApi?.sendMessage) {
     throw new Error("[nobait] No runtime message API available");
   }
 
-  if (typeof browser !== "undefined") {
-    return await browser.runtime.sendMessage(message);
-  } else {
-    return await new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage(message, (response: MessageResponse<T>) =>
-        handleCallbackResponse(response, resolve, reject),
-      );
-    });
+  // Start keepalive ping loop for slow EVALUATE_VIDEO calls.
+  let keepaliveInterval: ReturnType<typeof setInterval> | null = null;
+  if (message.type === "EVALUATE_VIDEO") {
+    keepaliveInterval = setInterval(() => {
+      void Promise.resolve(
+        runtimeApi.sendMessage({ type: "KEEPALIVE_PING" }),
+      ).catch(() => {
+        /* background may be shutting down — fine */
+      });
+    }, 10_000);
   }
-}
 
-function handleCallbackResponse<T>(
-  response: MessageResponse<T> | null,
-  resolve: (v: MessageResponse<T>) => void,
-  reject: (e: Error) => void,
-): void {
-  if (chrome.runtime.lastError) {
-    reject(new Error(chrome.runtime.lastError.message));
-  } else {
-    resolve(
-      response || { success: false, error: "No response from background" },
-    );
+  try {
+    return (await runtimeApi.sendMessage(message)) as MessageResponse<T>;
+  } finally {
+    if (keepaliveInterval !== null) {
+      clearInterval(keepaliveInterval);
+    }
   }
 }

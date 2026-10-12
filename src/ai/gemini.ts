@@ -1,6 +1,7 @@
 import { parseBatchItem } from "./classify";
 import type { AIProvider, AnalysisResult, BatchInput } from "./types";
 import { StampTier, isStampTier } from "../stamps/types";
+import { webext } from "../utils/webext";
 
 /**
  * Current model version for cache invalidation
@@ -42,22 +43,13 @@ export class GeminiProvider implements AIProvider {
    */
   async loadApiKey(): Promise<void> {
     try {
-      const browserApi = (globalThis as any).browser;
-      const chromeApi = (globalThis as any).chrome;
-      if (typeof browserApi !== "undefined" && browserApi?.storage?.local) {
-        const result = await browserApi.storage.local.get(["geminiApiKey"]);
-        this.apiKey = result.geminiApiKey || null;
-      } else if (
-        typeof chromeApi !== "undefined" &&
-        chromeApi?.storage?.local
-      ) {
-        const result = await new Promise<Record<string, string>>((resolve) => {
-          chromeApi.storage.local.get(
-            ["geminiApiKey"],
-            (r: Record<string, string>) => resolve(r),
-          );
-        });
-        this.apiKey = result.geminiApiKey || null;
+      const area = webext.storage?.local;
+      if (area) {
+        const result = (await area.get(["geminiApiKey"])) as Record<
+          string,
+          unknown
+        >;
+        this.apiKey = (result.geminiApiKey as string) || null;
       }
     } catch (err) {
       console.error("[nobait] Failed to load Gemini API key:", err);
@@ -69,25 +61,8 @@ export class GeminiProvider implements AIProvider {
    * Save API key to browser storage (encrypted at rest by the browser)
    */
   async saveApiKey(key: string): Promise<void> {
-    const browserApi = (globalThis as any).browser;
-    const chromeApi = (globalThis as any).chrome;
     try {
-      if (typeof browserApi !== "undefined" && browserApi?.storage?.local) {
-        await browserApi.storage.local.set({ geminiApiKey: key });
-      } else if (
-        typeof chromeApi !== "undefined" &&
-        chromeApi?.storage?.local
-      ) {
-        await new Promise<void>((resolve, reject) => {
-          chromeApi.storage.local.set({ geminiApiKey: key }, () => {
-            if (chromeApi.runtime?.lastError) {
-              reject(chromeApi.runtime.lastError);
-            } else {
-              resolve();
-            }
-          });
-        });
-      }
+      await webext.storage?.local?.set({ geminiApiKey: key });
       this.apiKey = key;
     } catch (err) {
       console.error("[nobait] Failed to save Gemini API key:", err);
@@ -207,10 +182,14 @@ export class GeminiProvider implements AIProvider {
       const streamParser = new IncrementalResultParser(onPartialResult);
       const decoder = new TextDecoder();
 
-      while (true) {
+      let reading = true;
+      while (reading) {
         const { value, done } = await reader.read();
-        if (done) break;
-        streamParser.append(decoder.decode(value, { stream: true }));
+        if (done) {
+          reading = false;
+        } else {
+          streamParser.append(decoder.decode(value, { stream: true }));
+        }
       }
       streamParser.finish();
 
@@ -388,7 +367,7 @@ export class IncrementalResultParser {
 
     if (this.results.length === 0) {
       // Fallback: try to parse the whole accumulated buffer as complete JSON
-      let jsonStr = this.buffer
+      const jsonStr = this.buffer
         .trim()
         .replace(/^```json\s*/i, "")
         .replace(/\s*```$/i, "");
