@@ -85,7 +85,7 @@ if (!WebAssembly.Suspending) {
 // Why: WebGPU compute inside a moz-extension:// origin worker stalls
 // llama.cpp generation indefinitely in Firefox 159/160 (verified in a
 // minimal repro extension; the identical build with WebGPU force-disabled
-// completes in seconds). See src/ai/wasm.ts issue reference.
+// completes in seconds). Full evidence matrix: issue #25.
 const NO_GPU_PRELUDE = `
 try{Object.defineProperty(WorkerNavigator.prototype,"gpu",{get:()=>({requestAdapter:async()=>null})});}catch(e){}
 `;

@@ -14,6 +14,14 @@
  * Static worker strategy: the build vendors @wllama/wllama with
  * `createWorker` patched to spawn packaged static workers (`ai-worker.js`,
  * `opfs-worker.js`) instead of blob: URLs, which Firefox MV3 CSP forbids.
+ *
+ * WebGPU is force-disabled in the generated worker (NO_GPU_PRELUDE in
+ * scripts/gen-wllama-worker.mjs): WebGPU compute in a moz-extension://
+ * origin worker stalls llama.cpp generation indefinitely in Firefox 159/160.
+ * CPU decode (~3s/completion at 135M) is the supported path. Evidence and
+ * repro matrix: issue #25. Re-enabling requires removing NO_GPU_PRELUDE and
+ * regenerating the worker — do not re-enable until the Firefox bug is fixed
+ * upstream and verified in an extension origin.
  */
 
 import { trace } from "../utils/trace";
