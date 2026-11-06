@@ -166,7 +166,7 @@ export async function evaluateFactCheck(
         signal: controller.signal,
       });
       return { ok: true, claims: searchResult.claims, errored: false };
-    } catch (err) {
+    } catch {
       // Network errors or abort → treat as error/timeout
       return { ok: false, claims: [], errored: true };
     }

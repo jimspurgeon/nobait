@@ -61,6 +61,14 @@ export interface AIProvider {
    */
   analyzeBatch(input: BatchInput): AsyncIterable<AnalysisResult>;
 
+  /**
+   * Optional eager initialization (model download/load) for providers with
+   * heavy first-use cost. Called fire-and-forget at startup so the model is
+   * ready before the user's first YouTube visit. MUST NOT run inference and
+   * MUST be idempotent — a later analyzeBatch may race it safely.
+   */
+  warmup?(): Promise<void>;
+
   /** Optional cleanup on shutdown (close sessions, abort in-flight work). */
   close?(): void;
 }

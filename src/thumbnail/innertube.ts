@@ -52,10 +52,17 @@ export function playerEndpointUrl(apiKey: string): string {
   return `https://www.youtube.com/youtubei/v1/player?key=${encodeURIComponent(apiKey)}`;
 }
 
-const WEB_CONTEXT = {
+const CLIENT_CONTEXT = {
   client: {
-    clientName: "WEB",
-    clientVersion: "2.20240101.00.00",
+    // ANDROID client: unaffected by the WEB client's attestation/PO-token
+    // tightening (since late 2025 "WEB" player responses return
+    // UNPLAYABLE "Video unavailable" for requests without a PO token,
+    // which killed storyboard spec fetching). ANDROID still returns full
+    // player payloads — and works with plain content-script fetches (no
+    // restricted headers, no UA spoofing needed).
+    clientName: "ANDROID",
+    clientVersion: "20.10.38",
+    androidSdkVersion: 30,
     hl: "en",
     gl: "US",
   },
@@ -85,7 +92,7 @@ export async function fetchPlayerResponse(
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      context: WEB_CONTEXT,
+      context: CLIENT_CONTEXT,
       videoId,
       contentCheckOk: true,
       racyCheckOk: true,

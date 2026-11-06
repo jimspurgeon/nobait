@@ -44,7 +44,11 @@ export function createTooltip(
 }
 
 /**
- * Attach tooltip to a host element
+ * Attach tooltip to a host element.
+ *
+ * Keyboard accessible: the host is made focusable (tabindex="0") and
+ * focus/blur mirror mouseenter/mouseleave so tooltip explanations
+ * reach keyboard-only and assistive-technology users.
  */
 export function attachTooltip(
   host: HTMLElement,
@@ -54,7 +58,7 @@ export function attachTooltip(
   const tooltip = createTooltip(text, options);
   document.body.appendChild(tooltip);
 
-  const show = (_e: MouseEvent) => {
+  const show = () => {
     const rect = host.getBoundingClientRect();
     const { offsetX = 5, offsetY = 5 } = options;
     tooltip.style.left = `${rect.right + offsetX}px`;
@@ -68,11 +72,20 @@ export function attachTooltip(
 
   host.addEventListener("mouseenter", show);
   host.addEventListener("mouseleave", hide);
+  host.addEventListener("focus", show);
+  host.addEventListener("blur", hide);
+
+  // Focusable so keyboard users can reach the tooltip explanation.
+  if (!host.hasAttribute("tabindex")) {
+    host.setAttribute("tabindex", "0");
+  }
 
   // Cleanup function
   host._nobaitTooltipCleanup = () => {
     host.removeEventListener("mouseenter", show);
     host.removeEventListener("mouseleave", hide);
+    host.removeEventListener("focus", show);
+    host.removeEventListener("blur", hide);
     tooltip.remove();
   };
 }

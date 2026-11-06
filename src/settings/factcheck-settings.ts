@@ -7,6 +7,8 @@
  */
 
 const SETTINGS_KEY = "nobait:factcheck-settings";
+/** Unified settings key (P7+) — takes precedence over the legacy key. */
+const UNIFIED_SETTINGS_KEY = "nobait:settings";
 
 export interface FactCheckSettings {
   /** Google Fact Check Tools API key. */
@@ -45,6 +47,10 @@ function browserAPI():
 
 /**
  * Read fact-check settings from storage.
+ *
+ * Resolution order (P7+): unified `nobait:settings`.factcheck → legacy
+ * `nobait:factcheck-settings` key → defaults. This keeps P6-era installs
+ * working while the options page writes the unified shape.
  */
 export async function readSettings(): Promise<FactCheckSettings> {
   try {
@@ -52,6 +58,32 @@ export async function readSettings(): Promise<FactCheckSettings> {
     const area = api?.storage?.local;
     if (typeof area?.get !== "function") return { ...DEFAULT_SETTINGS };
 
+    const unifiedBag =
+      ((await area.get(UNIFIED_SETTINGS_KEY)) as Record<string, unknown>) ?? {};
+    const unifiedRaw = unifiedBag[UNIFIED_SETTINGS_KEY];
+    if (
+      unifiedRaw != null &&
+      typeof unifiedRaw === "object" &&
+      "factcheck" in unifiedRaw
+    ) {
+      const fc = (unifiedRaw as Record<string, unknown>)[
+        "factcheck"
+      ] as unknown;
+      const r = (fc ?? {}) as Record<string, unknown>;
+      return {
+        apiKey:
+          typeof r["apiKey"] === "string" && r["apiKey"] !== ""
+            ? r["apiKey"]
+            : null,
+        enabled:
+          typeof r["enabled"] === "boolean"
+            ? r["enabled"]
+            : DEFAULT_SETTINGS.enabled,
+        timeoutMs: DEFAULT_SETTINGS.timeoutMs,
+      };
+    }
+
+    // Legacy fallback (pre-P7 shape).
     const bag = (await area.get(SETTINGS_KEY)) ?? {};
     const raw = (bag as Record<string, unknown>)[SETTINGS_KEY];
     if (raw == null || typeof raw !== "object") return { ...DEFAULT_SETTINGS };
