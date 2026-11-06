@@ -78,7 +78,20 @@ if (!WebAssembly.Suspending) {
 // nbThread=1 → single-thread build (no pthread blob worker needed);
 // compat=false → default JSPI+memory64 build.
 // The wasm path resolves relative to this worker's own packaged URL.
+//
+// NO_GPU_PRELUDE: mirrors wllama's ProxyToWorker.moduleInit() noWebGPU path
+// (worker.ts): patch navigator.gpu.requestAdapter to resolve null so
+// llama.cpp's WebGPU backend skips device registration and decodes on CPU.
+// Why: WebGPU compute inside a moz-extension:// origin worker stalls
+// llama.cpp generation indefinitely in Firefox 159/160 (verified in a
+// minimal repro extension; the identical build with WebGPU force-disabled
+// completes in seconds). See src/ai/wasm.ts issue reference.
+const NO_GPU_PRELUDE = `
+try{Object.defineProperty(WorkerNavigator.prototype,"gpu",{get:()=>({requestAdapter:async()=>null})});}catch(e){}
+`;
+
 const RUN_OPTIONS_SNIPPET = `
+${NO_GPU_PRELUDE}
 const RUN_OPTIONS = {
   pathConfig: {
     "wllama.wasm": new URL("wllama.wasm", self.location.href).href,

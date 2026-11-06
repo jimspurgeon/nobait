@@ -245,6 +245,11 @@ async function processTitle(titleEl: HTMLElement): Promise<void> {
 
   if (!videoId || !title) return;
 
+  // Prioritize videos the user can actually see: the background scheduler
+  // flushes visible cards ahead of off-screen ones.
+  const rect = titleEl.getBoundingClientRect();
+  const visible = rect.bottom >= 0 && rect.top <= window.innerHeight;
+
   // Skip if already processed
   if (seen.has(videoId)) return;
 
@@ -271,7 +276,12 @@ async function processTitle(titleEl: HTMLElement): Promise<void> {
         stamp: StampTier;
         stampExplanation: string;
       };
-    }> = await sendToBackground({ type: "EVALUATE_VIDEO", videoId, title });
+    }> = await sendToBackground({
+      type: "EVALUATE_VIDEO",
+      videoId,
+      title,
+      visible,
+    });
     if (response.success && response.data?.result) {
       applyStreamedResult({ ...response.data.result, videoId });
     }

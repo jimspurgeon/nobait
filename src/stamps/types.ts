@@ -70,6 +70,8 @@ export interface AIInput {
   transcript?: string;
   chapters?: Array<{ startMs: number; title: string }>;
   viewCount?: number;
+  /** True when the video card is in/near the viewport; flushed with priority. Absence = normal priority. */
+  visible?: boolean;
 }
 
 /**

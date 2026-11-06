@@ -116,6 +116,7 @@ class BackgroundWorker {
         description: string;
         transcript: string;
         chapters: Array<{ startMs: number; title: string }>;
+        visible: boolean;
         key: string;
         url: string;
       }>;
@@ -136,6 +137,7 @@ class BackgroundWorker {
             description: msg.description,
             transcript: msg.transcript,
             chapters: msg.chapters,
+            visible: msg.visible,
           }).catch((err: unknown) => ({
             success: false,
             error: String(err),
@@ -367,6 +369,7 @@ class BackgroundWorker {
     description?: string;
     transcript?: string;
     chapters?: Array<{ startMs: number; title: string }>;
+    visible?: boolean;
   }): Promise<{
     success: boolean;
     result?: StampResult & {
@@ -380,6 +383,7 @@ class BackgroundWorker {
       description: payload.description,
       transcript: payload.transcript,
       chapters: payload.chapters,
+      visible: payload.visible,
     };
     trace(`handleEvaluateVideo: ${payload.videoId}`);
 

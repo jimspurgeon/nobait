@@ -192,9 +192,14 @@ async function defaultLoader(): Promise<WllamaLike> {
       "builtin WASM AI unavailable: browser.runtime.getURL not found",
     );
   }
-  return new mod.Wllama({
-    default: runtime.getURL("wllama.wasm"),
-  });
+  // nobait: native (emscripten) logging ON — silent inference hangs (#24)
+  // gave zero signal; log volume is modest and only flows during load/infer.
+  return new mod.Wllama(
+    {
+      default: runtime.getURL("wllama.wasm"),
+    },
+    { suppressNativeLog: false },
+  );
 }
 
 export class WasmProvider implements AIProvider {

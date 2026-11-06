@@ -13,6 +13,8 @@ export type ContentToBackgroundMessage =
       description?: string;
       transcript?: string;
       chapters?: Array<{ startMs: number; title: string }>;
+      /** Viewport hint: prioritized in the background flush order */
+      visible?: boolean;
     }
   | { type: "GET_CACHE_STATUS" }
   | { type: "CLEAR_CACHE" }
